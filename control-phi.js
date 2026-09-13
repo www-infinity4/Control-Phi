@@ -45,6 +45,17 @@
   }
   function injectRemote(){
     if(document.getElementById('controlPhiButton'))return;
+    const existingMenu=document.querySelector('details.channel-menu, details[data-channel-menu]');
+    if(existingMenu){
+      const nav=existingMenu.querySelector('nav')||existingMenu.appendChild(document.createElement('nav'));
+      const filter=existingMenu.querySelector('input[type="search"]');
+      fetch(`${ASSET_ROOT}channels.json`,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{
+        nav.innerHTML=data.channels.map(item=>`<a href="${ROOT}${encodeURIComponent(item.path).replace(/%2F/g,'/')}/" data-name="${item.name.toLowerCase()}">${item.name}</a>`).join('');
+        if(filter)filter.dispatchEvent(new Event('input'));
+      }).catch(()=>{});
+      existingMenu.dataset.controlPhi='connected';
+      return;
+    }
     const css=document.createElement('link');css.rel='stylesheet';css.href=`${ASSET_ROOT}control-phi.css`;document.head.appendChild(css);
     const button=document.createElement('button');button.id='controlPhiButton';button.type='button';button.setAttribute('aria-label','Open Control Phi channels');button.setAttribute('aria-expanded','false');button.textContent='☰';
     const panel=document.createElement('aside');panel.id='controlPhiPanel';panel.setAttribute('aria-hidden','true');panel.innerHTML='<div class="control-phi-head"><strong>Control Phi</strong><button type="button" aria-label="Close channels">×</button></div><p class="control-phi-news">Every completed share becomes a research card in <a href="'+ROOT+'News-Phi/">News Phi</a>.</p><input class="control-phi-search" type="search" placeholder="Find a channel" aria-label="Find a channel"><nav class="control-phi-links" aria-label="Infinity channels"><a href="'+ROOT+'News-Phi/">News Phi</a></nav>';
