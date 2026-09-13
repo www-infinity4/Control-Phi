@@ -2,7 +2,8 @@
   'use strict';
   if(window.ControlPhi?.version)return;
   const ROOT='https://www-infinity4.github.io/';
-  const ASSET_ROOT=`${ROOT}Control-Phi/`;
+  const scriptSource=document.currentScript?.src||`${ROOT}Control-Phi/control-phi.js`;
+  const ASSET_ROOT=new URL('.',scriptSource).href;
   const SHARE_KEY='controlPhi:shareFeed:v1';
   const MAX_SHARES=500;
   const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
