@@ -1,0 +1,27 @@
+{
+  "version": "2026-09-13",
+  "purpose": "Shared retrieval and indexing capability registry for Infinity Phi, News Phi, Omni Phi, Control Phi, and the TV channel catalog.",
+  "policy": {
+    "rawUrlCards": false,
+    "requireMeaningfulTextBeforePublishing": true,
+    "sharedQueueKey": "controlPhi:ingestQueue:v1",
+    "sharedCardKey": "phiShared:collection:v1"
+  },
+  "backends": [
+    {"id":"meilisearch","repo":"www-infinity4/meilisearch","role":"fast lexical and hybrid index","runtime":"server","status":"forked-needs-deployment"},
+    {"id":"typesense","repo":"www-infinity4/typesense","role":"typo-tolerant instant search and field ranking","runtime":"server","status":"forked-needs-deployment"},
+    {"id":"qdrant","repo":"www-infinity4/qdrant","role":"vector memory and semantic retrieval","runtime":"server","status":"forked-needs-deployment"},
+    {"id":"vespa","repo":"www-infinity4/vespa","role":"multi-stage retrieval and ranking","runtime":"server","status":"forked-needs-deployment"},
+    {"id":"opensearch","repo":"www-infinity4/OpenSearch","role":"durable BM25 and vector search","runtime":"server","status":"forked-needs-deployment"},
+    {"id":"llama-index","repo":"www-infinity4/llama_index","role":"document ingestion and retrieval orchestration","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"flag-embedding","repo":"www-infinity4/FlagEmbedding","role":"embeddings and reranking","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"sentence-transformers","repo":"www-infinity4/sentence-transformers","role":"semantic embeddings and similarity","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"colbert","repo":"www-infinity4/ColBERT","role":"late-interaction passage retrieval","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"faiss","repo":"www-infinity4/faiss","role":"local vector index and nearest-neighbor retrieval","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"unstructured","repo":"www-infinity4/unstructured","role":"article and document extraction/chunking","runtime":"service-library","status":"forked-needs-adapter"},
+    {"id":"crawl4ai","repo":"www-infinity4/crawl4ai","role":"web crawling and article extraction","runtime":"service","status":"forked-needs-deployment"},
+    {"id":"searxng","repo":"www-infinity4/searxng","role":"broad metasearch discovery","runtime":"server","status":"forked-needs-deployment","priority":"first-live-search-adapter"},
+    {"id":"google-api-nodejs-client","repo":"www-infinity4/google-api-nodejs-client","role":"official Google API access when configured","runtime":"service-library","status":"forked-needs-credentials"},
+    {"id":"js-genai","repo":"www-infinity4/js-genai","role":"Gemini/Vertex reasoning and structured synthesis when configured","runtime":"service-library","status":"forked-needs-credentials"}
+  ]
+}
