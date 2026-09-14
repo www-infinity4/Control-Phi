@@ -1,12 +1,13 @@
 (function(root){
   'use strict';
 
-  const VERSION='20260914-unique1';
+  const VERSION='20260914-unique2';
   const PROFILE_COUNT=8;
-  const CACHE_PREFIX='infinity:movie-source-farm:v3:';
+  const CACHE_PREFIX='infinity:movie-source-farm:v4:';
+  const RELOAD_PREFIX='infinity:movie-source-farm:reload:';
   const IFRAME_API='https://www.youtube.com/iframe_api';
   const DEFAULT_TARGET=96;
-  const DEFAULT_MAX_CANDIDATES=260;
+  const DEFAULT_MAX_CANDIDATES=320;
   const FULL_CUE=/\b(full(?:\s+length)?|movie|film|feature|cinema)\b/i;
   const JUNK_CUE=/\b(trailer|teaser|clip|shorts?|preview|review|reaction|interview|behind\s+the\s+scenes|livestream|live\s+stream|gameplay|walkthrough|announcement|promo)\b/i;
 
@@ -47,6 +48,18 @@
     }).filter(Boolean);
   }
 
+  function profileBucket(profile,title){
+    const normalized=normalizedTitle(title);
+    if(!normalized)return-1;
+    return hash(normalized)%Math.max(1,Number(profile.partitionCount)||PROFILE_COUNT);
+  }
+
+  function yearAllowed(year,profile){
+    if(!Array.isArray(profile.yearRange)||profile.yearRange.length!==2)return true;
+    if(!year)return profile.strictYear!==true;
+    return year>=Number(profile.yearRange[0])&&year<=Number(profile.yearRange[1]);
+  }
+
   function titleMatchesProfile(title,profile){
     const raw=String(title||'').trim();
     if(!raw||JUNK_CUE.test(raw))return false;
@@ -55,30 +68,22 @@
     const exclude=compilePatterns(profile.exclude);
     if(include.length&&!include.some(re=>re.test(raw)))return false;
     if(exclude.some(re=>re.test(raw)))return false;
-    const year=extractYear(raw);
-    if(Array.isArray(profile.yearRange)&&profile.yearRange.length===2&&year){
-      if(year<Number(profile.yearRange[0])||year>Number(profile.yearRange[1]))return false;
-    }else if(Array.isArray(profile.yearRange)&&profile.strictYear&& !year){
-      return false;
-    }
-    const normalized=normalizedTitle(raw);
-    if(!normalized)return false;
-    const bucket=hash(normalized)%Math.max(1,Number(profile.partitionCount)||PROFILE_COUNT);
+    if(!yearAllowed(extractYear(raw),profile))return false;
+    const bucket=profileBucket(profile,raw);
+    if(bucket<0)return false;
     if(Number.isInteger(Number(profile.partitionIndex))&&bucket!==Number(profile.partitionIndex))return false;
     return true;
   }
 
-  function seedEligible(item,profile){
+  function acceptedItemMatches(item,profile){
     if(!item||!item.videoId||item.cleared===false)return false;
     const title=item.title||'';
-    const normalized=normalizedTitle(title);
-    if(!normalized)return false;
-    const bucket=hash(normalized)%Math.max(1,Number(profile.partitionCount)||PROFILE_COUNT);
+    if(!title||JUNK_CUE.test(title))return false;
+    if(!yearAllowed(Number(item.year)||extractYear(title),profile))return false;
+    const bucket=profileBucket(profile,title);
+    if(bucket<0)return false;
     if(Number.isInteger(Number(profile.partitionIndex))&&bucket!==Number(profile.partitionIndex))return false;
-    const year=Number(item.year)||extractYear(title);
-    if(Array.isArray(profile.yearRange)&&profile.yearRange.length===2&&year){
-      if(year<Number(profile.yearRange[0])||year>Number(profile.yearRange[1]))return false;
-    }
+    if(Number.isInteger(Number(item.networkBucket))&&item.networkBucket!==bucket)return false;
     return true;
   }
 
@@ -87,11 +92,11 @@
     const seenIds=new Set(),seenTitles=new Set();
     const filtered=[];
     for(const item of catalog){
-      if(!seedEligible(item,profile))continue;
+      if(!acceptedItemMatches(item,profile))continue;
       const titleKey=normalizedTitle(item.title);
       if(seenIds.has(item.videoId)||seenTitles.has(titleKey))continue;
       seenIds.add(item.videoId);seenTitles.add(titleKey);
-      filtered.push({...item,seed:true,networkBucket:Number(profile.partitionIndex)});
+      filtered.push({...item,seed:item.discovered!==true,networkBucket:profileBucket(profile,item.title)});
     }
     catalog.splice(0,catalog.length,...filtered);
     root.dispatchEvent(new CustomEvent('infinity:movie-catalog-seeded',{detail:{channelId:profile.channelId,count:filtered.length,version:VERSION}}));
@@ -107,7 +112,29 @@
     }catch(_){return[];}
   }
   function writeCache(profile,items){
-    try{localStorage.setItem(cacheKey(profile),JSON.stringify({version:VERSION,updatedAt:Date.now(),items:items.slice(0,160)}));}catch(_){ }
+    try{localStorage.setItem(cacheKey(profile),JSON.stringify({version:VERSION,updatedAt:Date.now(),items:items.slice(0,180)}));}catch(_){ }
+  }
+
+  function uniqueMerge(seed,items,target){
+    const out=[],ids=new Set(),titles=new Set();
+    for(const item of [...seed,...items]){
+      if(!item||!item.videoId)continue;
+      const titleKey=normalizedTitle(item.title||item.videoId);
+      if(!titleKey||ids.has(item.videoId)||titles.has(titleKey))continue;
+      ids.add(item.videoId);titles.add(titleKey);out.push(item);
+      if(target&&out.length>=target)break;
+    }
+    return out;
+  }
+
+  function applyCached(profile,catalog){
+    const target=Math.max(84,Number(profile.targetCount)||DEFAULT_TARGET);
+    const cached=readCache(profile).filter(item=>acceptedItemMatches(item,profile));
+    if(!cached.length)return catalog;
+    const merged=uniqueMerge(catalog,cached,target);
+    catalog.splice(0,catalog.length,...merged);
+    root.dispatchEvent(new CustomEvent('infinity:movie-catalog-cache',{detail:{channelId:profile.channelId,count:merged.length,version:VERSION}}));
+    return catalog;
   }
 
   let ytPromise=null;
@@ -159,7 +186,7 @@
         width:'2',height:'2',playerVars:{playsinline:1,controls:0,autoplay:0,enablejsapi:1,origin:location.origin,widget_referrer:location.href},
         events:{
           onReady:()=>{try{player.cuePlaylist({list:String(playlistId),listType:'playlist',index:0,startSeconds:0});}catch(_){finish([]);}},
-          onStateChange:event=>{if(event.data===YT.PlayerState.CUED){clearTimeout(timer);setTimeout(()=>finish(player.getPlaylist()),250);}},
+          onStateChange:event=>{if(event.data===YT.PlayerState.CUED){clearTimeout(timer);setTimeout(()=>finish(player.getPlaylist()),350);}},
           onError:()=>{clearTimeout(timer);finish(player&&player.getPlaylist?player.getPlaylist():[]);}
         }
       });
@@ -182,21 +209,9 @@
     return ids.slice().sort((a,b)=>hash(`${weekKey()}:${profile.channelId}:${a}`)-hash(`${weekKey()}:${profile.channelId}:${b}`));
   }
 
-  function uniqueMerge(seed,items,target){
-    const out=[],ids=new Set(),titles=new Set();
-    for(const item of [...seed,...items]){
-      if(!item||!item.videoId)continue;
-      const titleKey=normalizedTitle(item.title||item.videoId);
-      if(ids.has(item.videoId)||titles.has(titleKey))continue;
-      ids.add(item.videoId);titles.add(titleKey);out.push(item);
-      if(target&&out.length>=target)break;
-    }
-    return out;
-  }
-
   async function harvest(profile,catalog){
     const target=Math.max(84,Number(profile.targetCount)||DEFAULT_TARGET);
-    const cached=readCache(profile).filter(item=>titleMatchesProfile(item.title,profile));
+    const cached=readCache(profile).filter(item=>acceptedItemMatches(item,profile));
     let merged=uniqueMerge(catalog,cached,target);
     if(merged.length>=target){catalog.splice(0,catalog.length,...merged);return merged;}
 
@@ -207,18 +222,20 @@
       if(candidateIds.length>=Number(profile.maxCandidates||DEFAULT_MAX_CANDIDATES)*2)break;
     }
     candidateIds=[...new Set(candidateIds)].filter(id=>!merged.some(item=>item.videoId===id));
-    candidateIds=deterministicOrder(candidateIds,profile).slice(0,Math.max(target*3,Number(profile.maxCandidates)||DEFAULT_MAX_CANDIDATES));
+    candidateIds=deterministicOrder(candidateIds,profile).slice(0,Math.max(target*4,Number(profile.maxCandidates)||DEFAULT_MAX_CANDIDATES));
 
     const accepted=[];
     const concurrency=Math.max(2,Math.min(12,Number(profile.concurrency)||8));
     let cursor=0;
     async function worker(){
       while(cursor<candidateIds.length&&merged.length+accepted.length<target){
-        const index=cursor++;const id=candidateIds[index];
+        const id=candidateIds[cursor++];
         const meta=await oembed(id);
         if(!meta||!titleMatchesProfile(meta.title,profile))continue;
-        const title=cleanTitle(meta.title)||meta.title;
-        const year=extractYear(meta.title);
+        const rawTitle=meta.title;
+        const title=cleanTitle(rawTitle)||rawTitle;
+        const year=extractYear(rawTitle);
+        const networkBucket=profileBucket(profile,rawTitle);
         accepted.push({
           id:`${profile.channelId||'MOVIE'}-WEB-${id}`,
           title,
@@ -233,6 +250,8 @@
           rating:profile.rating||'Unrated',
           cleared:true,
           discovered:true,
+          networkBucket,
+          sourceFarmVersion:VERSION,
           posterUrl:meta.thumbnailUrl||''
         });
       }
@@ -244,12 +263,26 @@
     return merged;
   }
 
+  function maybeReloadForFreshCatalog(profile,beforeCount,afterCount){
+    if(afterCount<=beforeCount)return;
+    const target=Math.max(84,Number(profile.targetCount)||DEFAULT_TARGET);
+    const key=`${RELOAD_PREFIX}${VERSION}:${profile.channelId||'movie'}:${weekKey()}`;
+    try{
+      const count=Math.max(0,Number(sessionStorage.getItem(key))||0);
+      if(count>=2)return;
+      if(afterCount<Math.min(target,beforeCount+8))return;
+      sessionStorage.setItem(key,String(count+1));
+      setTimeout(()=>location.reload(),120);
+    }catch(_){ }
+  }
+
   async function expand(profile,catalog){
     if(!profile||!Array.isArray(catalog))return[];
-    prepareSeed(profile,catalog);
+    const beforeCount=catalog.length;
     try{
       const items=await harvest(profile,catalog);
       root.dispatchEvent(new CustomEvent('infinity:movie-catalog-ready',{detail:{channelId:profile.channelId,count:items.length,target:Math.max(84,Number(profile.targetCount)||DEFAULT_TARGET),version:VERSION}}));
+      maybeReloadForFreshCatalog(profile,beforeCount,items.length);
       return items;
     }catch(error){
       console.error('Infinity movie source farm',error);
@@ -262,11 +295,12 @@
     const profile=root.INFINITY_MOVIE_SOURCE,catalog=root.HERMIT_CATALOG;
     if(!profile||!Array.isArray(catalog))return;
     prepareSeed(profile,catalog);
+    applyCached(profile,catalog);
     const start=()=>expand(profile,catalog);
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(start,0),{once:true});
     else setTimeout(start,0);
   }
 
-  root.InfinityMovieSourceFarm={VERSION,hash,weekKey,normalizedTitle,extractYear,titleMatchesProfile,prepareSeed,playlistIds,oembed,expand};
+  root.InfinityMovieSourceFarm={VERSION,hash,weekKey,normalizedTitle,extractYear,titleMatchesProfile,acceptedItemMatches,prepareSeed,applyCached,playlistIds,oembed,expand};
   auto();
 })(window);
