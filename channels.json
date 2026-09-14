@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "updated": "2026-09-14",
   "channels": [
     {"name":"Omni TV","path":"Omni-TV"},
@@ -51,10 +51,6 @@
     {"name":"Abstractia","path":"Abstractia-"},
     {"name":"Animasync","path":"Animasync"},
     {"name":"SeekSync","path":"SeekSync"},
-    {"name":"Azyryth","path":"Azyryth"},
-    {"name":"PowerSync","path":"PowerSync"},
-    {"name":"HyperSync","path":"HyperSync"},
-    {"name":"AIsync","path":"AIsync"},
     {"name":"News Phi","path":"News-Phi"}
   ]
 }
