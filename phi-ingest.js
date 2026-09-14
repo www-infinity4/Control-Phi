@@ -20,6 +20,34 @@
     return (h >>> 0).toString(36);
   };
 
+  function xPostText(html) {
+    try {
+      const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+      return clean(doc.querySelector('blockquote p')?.textContent || doc.querySelector('p')?.textContent || '')
+        .replace(/https?:\/\/t\.co\/\S+/gi, ' ')
+        .replace(/pic\.twitter\.com\/\S+/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    } catch { return ''; }
+  }
+
+  function fetchXPost(url) {
+    return new Promise((resolve, reject) => {
+      const callback = `__phiX${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      const script = document.createElement('script');
+      const cleanup = () => {
+        clearTimeout(timer);
+        script.remove();
+        try { delete global[callback]; } catch { global[callback] = undefined; }
+      };
+      const timer = setTimeout(() => { cleanup(); reject(new Error('X post lookup timed out.')); }, 12000);
+      global[callback] = (data) => { cleanup(); resolve(data || {}); };
+      script.onerror = () => { cleanup(); reject(new Error('X post could not be read.')); };
+      script.src = `https://publish.x.com/oembed?${new URLSearchParams({ url, omit_script: 'true', dnt: 'true', callback })}`;
+      document.head.appendChild(script);
+    });
+  }
+
   function urlsFrom(value) {
     return clean(value).match(/https?:\/\/[^\s<>'\"]+/gi) || [];
   }
@@ -101,7 +129,7 @@
       extract: record.text,
       body: record.text,
       url: record.url,
-      domain: record.x ? `X / @${record.x.author}` : 'Shared research',
+      domain: record.x ? `X / ${record.authorName || `@${record.x.author}`}` : 'Shared research',
       provider: record.x ? 'X' : 'Shared research',
       searchQuery: record.searchText,
       questions: record.questions,
@@ -119,9 +147,29 @@
 
   function enqueue(record) {
     const queue = safeJson(KEYS.queue, []);
-    const duplicate = queue.find((item) => item.url && record.url && item.url === record.url && item.text === record.text);
-    if (!duplicate) queue.unshift(record);
+    const existing = queue.findIndex((item) => item.id === record.id || (item.url && record.url && item.url === record.url && item.text === record.text));
+    if (existing >= 0) queue[existing] = { ...queue[existing], ...record };
+    else queue.unshift(record);
     saveJson(KEYS.queue, queue.slice(0, 500));
+    return record;
+  }
+
+  async function resolveRecord(record) {
+    if (!record || !record.needsResolution || !record.x || !record.url) return record;
+    const post = await fetchXPost(record.url);
+    const body = xPostText(post.html);
+    if (!body) return record;
+    record.text = body;
+    record.body = body;
+    record.title = titleFor({}, body, record.x);
+    record.authorName = clean(post.author_name);
+    record.url = clean(post.url) || record.url;
+    record.terms = termsFrom(`${record.title} ${body}`, 10);
+    record.questions = questionsFor(record.title, body);
+    record.searchText = clean(`${record.authorName} ${record.title} ${body}`);
+    record.needsResolution = false;
+    record.readyForCard = true;
+    record.resolvedAt = new Date().toISOString();
     return record;
   }
 
@@ -132,17 +180,25 @@
     return record;
   }
 
+  async function ingestResolved(input) {
+    const record = normalize(input || {});
+    try { await resolveRecord(record); } catch (error) { record.resolutionError = error?.message || 'Source resolution failed.'; }
+    enqueue(record);
+    if (record.readyForCard) publishCard(record);
+    return record;
+  }
+
   async function ingestClipboard() {
     if (!navigator.clipboard || !navigator.clipboard.readText) throw new Error('Clipboard read is unavailable in this browser.');
     const text = await navigator.clipboard.readText();
     if (!clean(text)) throw new Error('Clipboard is empty.');
-    return ingest({ text, source: 'clipboard' });
+    return ingestResolved({ text, source: 'clipboard' });
   }
 
-  function ingestShareTarget(search) {
+  async function ingestShareTarget(search) {
     const params = search instanceof URLSearchParams ? search : new URLSearchParams(search || location.search);
     if (!params.has('shareTarget') && !params.has('text') && !params.has('url')) return null;
-    return ingest({
+    return ingestResolved({
       title: params.get('title') || '',
       text: [params.get('text') || '', params.get('url') || ''].filter(Boolean).join(' '),
       url: params.get('url') || '',
@@ -152,13 +208,28 @@
 
   function pending() { return safeJson(KEYS.queue, []).filter((item) => item.needsResolution); }
 
+  async function resolvePending(limit) {
+    const queue = safeJson(KEYS.queue, []);
+    let resolved = 0;
+    for (const record of queue.filter((item) => item.needsResolution && item.x).slice(0, limit || 12)) {
+      try {
+        await resolveRecord(record);
+        if (record.readyForCard) { publishCard(record); resolved += 1; }
+      } catch (error) { record.resolutionError = error?.message || 'Source resolution failed.'; }
+    }
+    saveJson(KEYS.queue, queue.slice(0, 500));
+    return resolved;
+  }
+
   global.PhiIngest = Object.freeze({
     normalize,
     ingest,
+    ingestResolved,
     ingestClipboard,
     ingestShareTarget,
     publishCard,
     pending,
+    resolvePending,
     xIdentity,
     keys: { ...KEYS }
   });
