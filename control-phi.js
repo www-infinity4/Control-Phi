@@ -147,9 +147,14 @@
 
   function recentConfirmedShare(wallet,now,reference=''){
     const ref=clean(reference||location.href,700);
-    return wallet.shareEvents.some(event=>{
+    const ownReceipt=wallet.shareEvents.some(event=>{
       const when=Number(event?.createdAt||0);
       return when&&Math.abs(now-when)<3500&&event?.confirmed!==false&&event?.verified!==false&&event?.source==='control-phi-fallback'&&clean(event?.contentId,700)===ref;
+    });
+    if(ownReceipt)return true;
+    return wallet.ledger.some(entry=>{
+      const when=Number(entry?.createdAt||entry?.at||0);
+      return when&&Math.abs(now-when)<3500&&(entry?.type==='share_credit'||entry?.type==='share_reward');
     });
   }
 
@@ -335,7 +340,7 @@
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.7.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
+  window.ControlPhi={version:'1.7.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
