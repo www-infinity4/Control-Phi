@@ -34,7 +34,7 @@
     const detail=clean(payload.text||nowPlaying()||pageMeta('description'),1000);
     const lead=`${title} was shared${channel?` from ${channel}`:''}.`;
     const context=detail&&detail.toLowerCase()!==title.toLowerCase()?detail:`The share points to ${clean(payload.url||location.href,300)} and preserves the program or subject as a News Phi research starting point.`;
-    const next=`News Phi prepared the research query “${query}” from the information available at the moment of sharing. Shared links now pass through News Phi so later clicks can strengthen the same interest trail before continuing to the original page.`;
+    const next=`News Phi prepared the research query “${query}” from the information available at the moment of sharing. The outward share keeps the original channel URL and preview while News Phi records the share as an interest signal in the background.`;
     return [lead,context,next].join(' ');
   }
 
@@ -222,7 +222,7 @@
     const nativeShare=navigator.share.bind(navigator);
     const wrapped=async(data={})=>{
       const plan=sharePlan(data,'web_share_api');
-      const outgoing={...data,url:plan.trackingUrl};
+      const outgoing={...data,title:data.title||plan.payload.title,text:data.text||plan.payload.text,url:plan.payload.url};
       const result=await nativeShare(outgoing);
       recordShare({...plan.payload,id:plan.id,trackingUrl:plan.trackingUrl,shareConfirmed:true,shareMethod:'web_share_api',platform:'external'});
       setTimeout(()=>ensureShareCredit(plan.payload.url,'web_share_api'),900);
@@ -246,7 +246,7 @@
       if(shareUrl.protocol!=='mailto:')target=shareUrl.searchParams.get('url')||shareUrl.searchParams.get('u')||location.href;
       const plan=sharePlan({title:document.title,text:nowPlaying()||pageMeta('description'),url:target,image:pageMeta('og:image')||pageMeta('twitter:image'),channel:pageChannel()},platform);
       if(shareUrl.protocol!=='mailto:'){
-        if(shareUrl.searchParams.has('u'))shareUrl.searchParams.set('u',plan.trackingUrl);else shareUrl.searchParams.set('url',plan.trackingUrl);
+        if(shareUrl.searchParams.has('u'))shareUrl.searchParams.set('u',plan.payload.url);else shareUrl.searchParams.set('url',plan.payload.url);
         anchor.href=shareUrl.href;
       }
       recordShare({...plan.payload,id:plan.id,trackingUrl:plan.trackingUrl,shareConfirmed:false,shareMethod:'share_link',platform});
@@ -297,7 +297,7 @@
     }
     const css=document.createElement('link');css.rel='stylesheet';css.href=`${ASSET_ROOT}control-phi.css`;document.head.appendChild(css);
     const button=document.createElement('button');button.id='controlPhiButton';button.type='button';button.setAttribute('aria-label','Open Control Phi channels');button.setAttribute('aria-expanded','false');button.textContent='☰';
-    const panel=document.createElement('aside');panel.id='controlPhiPanel';panel.setAttribute('aria-hidden','true');panel.innerHTML='<div class="control-phi-head"><strong>Control Phi</strong><button type="button" aria-label="Close channels">×</button></div><p class="control-phi-news">Completed shares and tracked share-link clicks feed <a href="'+NEWS_URL+'">News Phi</a>.</p><input class="control-phi-search" type="search" placeholder="Find a channel" aria-label="Find a channel"><nav class="control-phi-links" aria-label="Infinity channels"><a href="'+NEWS_URL+'">News Phi</a></nav>';
+    const panel=document.createElement('aside');panel.id='controlPhiPanel';panel.setAttribute('aria-hidden','true');panel.innerHTML='<div class="control-phi-head"><strong>Control Phi</strong><button type="button" aria-label="Close channels">×</button></div><p class="control-phi-news">Completed shares feed <a href="'+NEWS_URL+'">News Phi</a> while outward links keep the original channel source and preview.</p><input class="control-phi-search" type="search" placeholder="Find a channel" aria-label="Find a channel"><nav class="control-phi-links" aria-label="Infinity channels"><a href="'+NEWS_URL+'">News Phi</a></nav>';
     document.body.append(button,panel);
     const toggle=(open)=>{panel.classList.toggle('open',open);panel.setAttribute('aria-hidden',String(!open));button.setAttribute('aria-expanded',String(open))};
     button.addEventListener('click',()=>toggle(!panel.classList.contains('open')));panel.querySelector('.control-phi-head button').addEventListener('click',()=>toggle(false));
@@ -306,7 +306,7 @@
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.5.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
+  window.ControlPhi={version:'1.6.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
