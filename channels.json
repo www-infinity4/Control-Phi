@@ -1,8 +1,7 @@
 {
-  "version": 4,
-  "updated": "2026-09-13",
+  "version": 5,
+  "updated": "2026-09-14",
   "channels": [
-    {"name":"Hydrogen Digital TV","path":"Hydrogen-Digital-TV"},
     {"name":"Omni TV","path":"Omni-TV"},
     {"name":"Hermit TV","path":"Hermit-TV"},
     {"name":"Star Launcher","path":"Star-Launcher"},
