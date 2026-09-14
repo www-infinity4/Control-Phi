@@ -65,5 +65,14 @@
     const observer=new IntersectionObserver(entries=>{entries.forEach(entry=>{const link=entry.target;if(entry.isIntersecting&&!queued.has(link)){queued.add(link);queue.push(link);observer.unobserve(link)}});pump()},{rootMargin:'350px'});nav.querySelectorAll('.icg-channel').forEach(link=>observer.observe(link))
   }
 
-  normalizeChannelMenu();fetch(REGISTRY,{cache:'no-store'}).then(response=>response.ok?response.json():Promise.reject()).then(data=>mount(Array.isArray(data.channels)?data.channels:[])).catch(()=>{});
+  normalizeChannelMenu();
+  const pagePath=location.pathname.split('/').filter(Boolean)[0]||'';
+  if(pagePath==='Omni-TV'){
+    document.getElementById('infinityChannelGuide')?.remove();
+    if(!document.getElementById('omniGuideStability')){
+      const stable=document.createElement('style');stable.id='omniGuideStability';stable.textContent='.channel-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-auto-flow:row!important;overflow-anchor:none!important}.channel-card{overflow-anchor:none!important}@media(max-width:1050px){.channel-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}@media(max-width:760px){.channel-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}@media(max-width:520px){.channel-grid{grid-template-columns:1fr!important}}';document.head.appendChild(stable)
+    }
+    return;
+  }
+  fetch(REGISTRY,{cache:'no-store'}).then(response=>response.ok?response.json():Promise.reject()).then(data=>mount(Array.isArray(data.channels)?data.channels:[])).catch(()=>{});
 })();
