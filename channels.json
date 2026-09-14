@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "updated": "2026-09-14",
   "channels": [
     {"name":"Omni TV","path":"Omni-TV","type":"website","genres":["network","guide","search"]},
@@ -51,6 +51,7 @@
     {"name":"Abstractia","path":"Abstractia-","type":"tv","genres":["movies","classic","experimental"]},
     {"name":"Animasync","path":"Animasync","type":"tv","genres":["cartoon","music","experimental"]},
     {"name":"SeekSync","path":"SeekSync","type":"tv","genres":["music","experimental"]},
+    {"name":"eBay","path":"eBay","url":"https://www.ebay.com/","type":"website","genres":["shopping","marketplace","collectibles"]},
     {"name":"News Phi","path":"News-Phi","type":"website","genres":["news","search","research"]},
     {"name":"Omni Phi","path":"Omni-Phi","type":"website","genres":["search","research","create"]},
     {"name":"Infinity Phi","path":"C13b0/phi","type":"website","genres":["search","research","create"]},
