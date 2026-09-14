@@ -10,6 +10,23 @@
   const readCache=()=>{try{return JSON.parse(localStorage.getItem(CACHE_KEY))||{}}catch{return {}}};
   const writeCache=value=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(value))}catch{}};
 
+  function normalizeChannelMenu(){
+    const menu=document.querySelector('details.channel-menu, details[data-channel-menu]');
+    if(!menu)return;
+    const summary=menu.querySelector(':scope > summary')||menu.querySelector('summary');
+    if(summary){
+      summary.setAttribute('aria-label','Open channels');
+      summary.innerHTML='<span aria-hidden="true">☰</span><span class="control-phi-channel-label">Channels</span>';
+    }
+    menu.dataset.controlPhi='connected';
+    if(!document.getElementById('controlPhiChannelShellStyles')){
+      const style=document.createElement('style');
+      style.id='controlPhiChannelShellStyles';
+      style.textContent='details.channel-menu>summary,details[data-channel-menu]>summary{width:auto!important;min-width:104px!important;min-height:40px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;padding:0 12px!important;white-space:nowrap!important}details.channel-menu>summary .control-phi-channel-label,details[data-channel-menu]>summary .control-phi-channel-label{display:inline!important;font:900 12px/1 system-ui,sans-serif!important;letter-spacing:.04em!important;text-transform:uppercase!important}';
+      document.head.appendChild(style);
+    }
+  }
+
   function currentProgram(doc=document){
     const selectors=['[data-now-playing]','#nowTitle','#programTitle','#nowPlaying','.now-title','.guide-row.current .program-title','.row.now strong'];
     for(const selector of selectors){const value=clean(doc.querySelector(selector)?.textContent);if(valid(value))return value}
@@ -54,5 +71,6 @@
     nav.querySelectorAll('.icg-channel').forEach(link=>observer.observe(link));
   }
 
+  normalizeChannelMenu();
   fetch(REGISTRY,{cache:'no-store'}).then(response=>response.ok?response.json():Promise.reject()).then(data=>mount(Array.isArray(data.channels)?data.channels:[])).catch(()=>{});
 })();
