@@ -134,8 +134,10 @@
 
   function refreshWalletUI(){
     const snapshot=walletSnapshot();
-    document.querySelectorAll('[data-control-phi-wallet-balance]').forEach(el=>el.textContent=String(snapshot.balance));
-    document.querySelectorAll('[data-control-phi-wallet-progress]').forEach(el=>el.textContent=`${snapshot.progressToNextCoin}/10`);
+    document.querySelectorAll('[data-control-phi-wallet-balance]').forEach(el=>{const value=String(snapshot.balance);if(el.textContent!==value)el.textContent=value});
+    document.querySelectorAll('[data-control-phi-wallet-progress]').forEach(el=>{const value=`${snapshot.progressToNextCoin}/10`;if(el.textContent!==value)el.textContent=value});
+    document.querySelectorAll('[data-control-phi-wallet-menu-balance]').forEach(el=>{const value=`${snapshot.balance} ⭐`;if(el.textContent!==value)el.textContent=value});
+    document.querySelectorAll('[data-control-phi-wallet-menu-progress]').forEach(el=>{const value=`${snapshot.progressToNextCoin}/10`;if(el.textContent!==value)el.textContent=value});
     const button=document.getElementById('controlPhiWalletButton');
     if(button)button.innerHTML=`<span aria-hidden="true">⭐</span><strong>${snapshot.balance}</strong><small>${snapshot.progressToNextCoin}/10</small>`;
     const name=document.querySelector('[data-control-phi-wallet-name]');
@@ -143,10 +145,11 @@
     return snapshot;
   }
 
-  function recentConfirmedShare(wallet,now){
+  function recentConfirmedShare(wallet,now,reference=''){
+    const ref=clean(reference||location.href,700);
     return wallet.shareEvents.some(event=>{
       const when=Number(event?.createdAt||0);
-      return when&&Math.abs(now-when)<3500&&event?.confirmed!==false&&event?.verified!==false;
+      return when&&Math.abs(now-when)<3500&&event?.confirmed!==false&&event?.verified!==false&&event?.source==='control-phi-fallback'&&clean(event?.contentId,700)===ref;
     });
   }
 
@@ -154,7 +157,7 @@
     const store=walletStore();
     const wallet=normalizeWallet(store.profile);
     const now=Date.now();
-    if(recentConfirmedShare(wallet,now)){
+    if(recentConfirmedShare(wallet,now,reference)){
       refreshWalletUI();
       return {...walletSnapshot(),awarded:0,alreadyRecorded:true};
     }
@@ -175,11 +178,34 @@
     return detail;
   }
 
+  function injectWalletIntoMenu(){
+    const nav=document.querySelector('details.channel-menu nav,details[data-channel-menu] nav,#controlPhiPanel .control-phi-links');
+    if(!nav)return;
+    let item=document.getElementById('controlPhiWalletMenuButton');
+    if(!item){
+      item=document.createElement('button');
+      item.id='controlPhiWalletMenuButton';
+      item.type='button';
+      item.setAttribute('aria-label','Open StarCoin wallet');
+      item.innerHTML='<span aria-hidden="true">⭐</span><span class="cp-wallet-menu-name"><strong>StarCoin Wallet</strong><small>10 shares = 1 StarCoin</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-wallet-menu-balance>0 ⭐</strong><small data-control-phi-wallet-menu-progress>0/10</small></span>';
+      item.addEventListener('click',()=>document.getElementById('controlPhiWalletButton')?.click());
+    }
+    if(item.parentElement!==nav)nav.prepend(item);
+    refreshWalletUI();
+  }
+
+  function watchWalletMenu(){
+    if(window.__controlPhiWalletMenuObserver||!document.body)return;
+    const observer=new MutationObserver(()=>{if(!document.getElementById('controlPhiWalletMenuButton'))injectWalletIntoMenu()});
+    observer.observe(document.body,{childList:true,subtree:true});
+    window.__controlPhiWalletMenuObserver=observer;
+  }
+
   function injectWallet(){
-    if(document.getElementById('controlPhiWalletButton')){refreshWalletUI();return}
+    if(document.getElementById('controlPhiWalletButton')){injectWalletIntoMenu();watchWalletMenu();refreshWalletUI();return}
     const style=document.createElement('style');
     style.id='controlPhiWalletStyle';
-    style.textContent='#controlPhiWalletButton{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:#141923;color:#fff;font:800 13px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.22)}#controlPhiWalletButton small{opacity:.72;font-size:10px}#controlPhiWalletButton.control-phi-wallet-floating{position:fixed;right:68px;bottom:16px;z-index:10001;background:#0b1020}#controlPhiWalletPanel{position:fixed;right:16px;bottom:68px;z-index:10002;width:min(300px,calc(100vw - 32px));padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:#080b12;color:#fff;box-shadow:0 24px 70px rgba(0,0,0,.58);font:500 14px/1.45 system-ui,sans-serif}#controlPhiWalletPanel[hidden]{display:none}#controlPhiWalletPanel .cp-wallet-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:7px 0}#controlPhiWalletPanel strong{font-size:18px}#controlPhiWalletPanel p{margin:10px 0 0;color:#cbd5e1;font-size:12px}';
+    style.textContent='#controlPhiWalletButton{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:#141923;color:#fff;font:800 13px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.22)}#controlPhiWalletButton small{opacity:.72;font-size:10px}#controlPhiWalletButton.control-phi-wallet-floating{position:fixed;right:68px;bottom:16px;z-index:10001;background:#0b1020}#controlPhiWalletPanel{position:fixed;right:16px;bottom:68px;z-index:10002;width:min(300px,calc(100vw - 32px));padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:#080b12;color:#fff;box-shadow:0 24px 70px rgba(0,0,0,.58);font:500 14px/1.45 system-ui,sans-serif}#controlPhiWalletPanel[hidden]{display:none}#controlPhiWalletPanel .cp-wallet-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:7px 0}#controlPhiWalletPanel strong{font-size:18px}#controlPhiWalletPanel p{margin:10px 0 0;color:#cbd5e1;font-size:12px}#controlPhiWalletMenuButton{width:100%;min-height:50px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:9px 11px;margin:2px 0 5px;border:1px solid rgba(255,221,89,.34);border-radius:12px;background:linear-gradient(135deg,rgba(122,83,12,.38),rgba(18,15,9,.92));color:#fff;text-align:left;cursor:pointer;font:800 12px/1.2 system-ui,sans-serif}#controlPhiWalletMenuButton>span:first-child{font-size:18px}.cp-wallet-menu-name,.cp-wallet-menu-value{display:grid;gap:2px}.cp-wallet-menu-name small,.cp-wallet-menu-value small{font-size:10px;color:#d8c985}.cp-wallet-menu-value{justify-items:end}';
     document.head.appendChild(style);
     const button=document.createElement('button');
     button.id='controlPhiWalletButton';button.type='button';button.setAttribute('aria-label','Open StarCoin wallet');button.setAttribute('aria-expanded','false');
@@ -189,7 +215,9 @@
     document.body.appendChild(panel);
     const toggle=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)refreshWalletUI()};
     button.addEventListener('click',toggle);
-    document.addEventListener('click',event=>{if(panel.hidden||event.target===button||button.contains(event.target)||panel.contains(event.target))return;panel.hidden=true;button.setAttribute('aria-expanded','false')});
+    document.addEventListener('click',event=>{if(panel.hidden||event.target===button||button.contains(event.target)||panel.contains(event.target)||event.target?.closest?.('#controlPhiWalletMenuButton'))return;panel.hidden=true;button.setAttribute('aria-expanded','false')});
+    injectWalletIntoMenu();
+    watchWalletMenu();
     refreshWalletUI();
   }
 
@@ -290,6 +318,7 @@
       const filter=existingMenu.querySelector('input[type="search"]');
       fetch(`${ASSET_ROOT}channels.json`,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{
         nav.innerHTML=data.channels.map(item=>`<a href="${ROOT}${encodeURIComponent(item.path).replace(/%2F/g,'/')}/" data-name="${item.name.toLowerCase()}">${item.name}</a>`).join('');
+        injectWalletIntoMenu();
         if(filter)filter.dispatchEvent(new Event('input'));
       }).catch(()=>{});
       existingMenu.dataset.controlPhi='connected';
@@ -302,11 +331,11 @@
     const toggle=(open)=>{panel.classList.toggle('open',open);panel.setAttribute('aria-hidden',String(!open));button.setAttribute('aria-expanded',String(open))};
     button.addEventListener('click',()=>toggle(!panel.classList.contains('open')));panel.querySelector('.control-phi-head button').addEventListener('click',()=>toggle(false));
     const nav=panel.querySelector('.control-phi-links');const input=panel.querySelector('input');
-    fetch(`${ASSET_ROOT}channels.json`,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{nav.innerHTML=data.channels.map(item=>`<a href="${ROOT}${encodeURIComponent(item.path).replace(/%2F/g,'/')}/" data-name="${item.name.toLowerCase()}">${item.name}</a>`).join('');filter()}).catch(()=>{});
+    fetch(`${ASSET_ROOT}channels.json`,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(data=>{nav.innerHTML=data.channels.map(item=>`<a href="${ROOT}${encodeURIComponent(item.path).replace(/%2F/g,'/')}/" data-name="${item.name.toLowerCase()}">${item.name}</a>`).join('');injectWalletIntoMenu();filter()}).catch(()=>{});
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.6.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
+  window.ControlPhi={version:'1.7.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
