@@ -266,14 +266,23 @@
   function injectCosmo(){
     if(document.querySelector('script[data-control-phi-cosmo]'))return;
     const script=document.createElement('script');
-    script.src=`${ROOT}Cosmo/channel-loader.js?v=20260914-channel1`;
+    script.src=`${ROOT}Cosmo/channel-loader.js?v=20260914-editor2`;
     script.dataset.controlPhiCosmo='1';
+    document.body.appendChild(script);
+  }
+
+  function injectChannelGuide(){
+    if(document.querySelector('script[data-control-phi-guide]'))return;
+    const script=document.createElement('script');
+    script.src=`${ASSET_ROOT}channel-guide.js?v=20260914-guide1`;
+    script.dataset.controlPhiGuide='1';
     document.body.appendChild(script);
   }
 
   function injectRemote(){
     injectWallet();
     injectCosmo();
+    injectChannelGuide();
     if(document.getElementById('controlPhiButton'))return;
     const existingMenu=document.querySelector('details.channel-menu, details[data-channel-menu]');
     if(existingMenu){
