@@ -263,8 +263,17 @@
     window.addEventListener('controlphi:wallet-change',refreshWalletUI);
   }
 
+  function injectCosmo(){
+    if(document.querySelector('script[data-control-phi-cosmo]'))return;
+    const script=document.createElement('script');
+    script.src=`${ROOT}Cosmo/channel-loader.js?v=20260914-channel1`;
+    script.dataset.controlPhiCosmo='1';
+    document.body.appendChild(script);
+  }
+
   function injectRemote(){
     injectWallet();
+    injectCosmo();
     if(document.getElementById('controlPhiButton'))return;
     const existingMenu=document.querySelector('details.channel-menu, details[data-channel-menu]');
     if(existingMenu){
@@ -288,7 +297,7 @@
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.4.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
+  window.ControlPhi={version:'1.5.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,refreshWallet:refreshWalletUI};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
