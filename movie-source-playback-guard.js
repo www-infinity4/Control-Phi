@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
 
-  const VERSION='20260914-playback3';
+  const VERSION='20260915-playback4';
   const seed=Array.isArray(root.__INFINITY_MOVIE_SEED_CATALOG)?root.__INFINITY_MOVIE_SEED_CATALOG.map(item=>({...item})):[];
   const catalog=root.HERMIT_CATALOG;
   const profile=root.INFINITY_MOVIE_SOURCE||{};
@@ -18,6 +18,21 @@
     const names=String(profile.sourceName||'').toLowerCase().split('+').map(value=>value.trim()).filter(value=>value.length>3);
     return names.some(name=>label.includes(name));
   }
+  function restoreCatalog(){
+    const merged=[],ids=new Set(),titles=new Set();
+    const add=item=>{
+      if(!item)return;
+      const id=String(item.videoId||item.id||'').trim();
+      const title=clean(item.originalTitle||item.title||id);
+      const key=id?`id:${id}`:`title:${title}`;
+      if(!key||key==='title:'||ids.has(key)||titles.has(title))return;
+      ids.add(key);if(title)titles.add(title);merged.push(item);
+    };
+    seed.forEach(add);
+    catalog.forEach(add);
+    catalog.splice(0,catalog.length,...merged);
+    return catalog;
+  }
   function verifiedPool(){
     const out=[],ids=new Set(),titles=new Set();
     const candidates=[...catalog,...seed.filter(seedBelongsHere)];
@@ -33,7 +48,7 @@
     const base=root.INFINITY_MOVIE_SOURCE_STATUS||{};
     const minimum=Math.max(1,Number(base.minimum||profile.minimumReadyCount||84));
     const target=Math.max(minimum,Number(base.target||profile.targetCount||96));
-    return {...base,version:VERSION,channelId:base.channelId||profile.channelId||'MOVIE',count:pool.length,minimum,target,ready:pool.length>=minimum,sourceName:base.sourceName||profile.sourceName||'YouTube',playableNow:pool.length>0};
+    return {...base,version:VERSION,channelId:base.channelId||profile.channelId||'MOVIE',count:pool.length,minimum,target,ready:pool.length>=minimum,sourceName:base.sourceName||profile.sourceName||'YouTube',playableNow:pool.length>0,curatedCount:seed.length,catalogCount:catalog.length};
   }
   function prettyChannel(status){return String(status.channelId||'Movie').replace(/-/g,' ').replace(/\b\w/g,m=>m.toUpperCase())}
   function render(status){
@@ -44,7 +59,7 @@
     const strong=button.querySelector('span')||button,small=button.querySelector('small');
     if(strong&&status.playableNow&&/^Building\b/i.test(strong.textContent||''))strong.textContent=`Enter ${prettyChannel(status)}`;
     if(small){
-      const value=status.ready?'84+ unique full movies ready for the seven-day deck':`${status.count}/${status.minimum} verified movies · current channel schedule stays playable while verification continues`;
+      const value=status.ready?'Curated lineup preserved · verified source additions ready':`${status.count}/${status.minimum} verified additions · curated channel catalog preserved while verification continues`;
       if(small.textContent!==value)small.textContent=value;
     }
   }
@@ -56,6 +71,7 @@
     engine.__infinityPlaybackGuard=false;
   }
   function refresh(){
+    restoreCatalog();
     const pool=verifiedPool();
     const status=effectiveStatus(pool);
     restoreSchedule();
@@ -69,5 +85,5 @@
   }
   refresh();
   ['infinity:movie-catalog-cache','infinity:movie-catalog-progress','infinity:movie-catalog-ready','infinity:movie-catalog-error'].forEach(name=>root.addEventListener(name,()=>setTimeout(refresh,0)));
-  root.InfinityMoviePlaybackGuard={VERSION,refresh};
+  root.InfinityMoviePlaybackGuard={VERSION,refresh,restoreCatalog};
 })(window);
