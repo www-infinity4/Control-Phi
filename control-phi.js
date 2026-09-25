@@ -150,6 +150,40 @@
     return {balance:wallet.tokens,starCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',quants:assets.quants,infinity:assets.infinity};
   }
 
+  function importLegacyStarCoinBalance(amount,source='legacy'){
+    const legacy=Math.round(Math.max(0,Number(amount)||0)*10)/10;
+    const store=walletStore();
+    const wallet=normalizeWallet(store.profile);
+    const current=Math.round((wallet.tokens+(wallet.pendingShareCredits/10))*10)/10;
+    if(!(legacy>current+0.0001)){
+      refreshWalletUI();
+      return {...walletSnapshot(),restored:false,legacy,current};
+    }
+    const whole=Math.floor(legacy+1e-9);
+    const tenths=Math.max(0,Math.min(9,Math.round((legacy-whole)*10)));
+    wallet.tokens=whole;
+    wallet.pendingShareCredits=tenths;
+    wallet.shareCount=Math.max(wallet.shareCount,whole*10+tenths);
+    const referenceId='legacy-starcoin:'+clean(source,120);
+    wallet.ledger.push({
+      id:'tx-legacy-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      type:'legacy_balance_recovery',
+      amount:Math.round((legacy-current)*10)/10,
+      balance:wallet.tokens,
+      pendingShareCredits:wallet.pendingShareCredits,
+      reason:'Recovered legacy StarCoin balance',
+      referenceId,
+      createdAt:Date.now(),
+      source:'control-phi-recovery'
+    });
+    wallet.ledger=wallet.ledger.slice(-500);
+    store.save(wallet);
+    const detail={balance:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,restored:true,legacy,previous:current,source};
+    window.dispatchEvent(new CustomEvent('controlphi:wallet-change',{detail}));
+    refreshWalletUI();
+    return {...walletSnapshot(),...detail};
+  }
+
   function refreshWalletUI(){
     const snapshot=walletSnapshot();
     document.querySelectorAll('[data-control-phi-wallet-balance]').forEach(el=>{const value=String(snapshot.balance);if(el.textContent!==value)el.textContent=value});
@@ -381,7 +415,7 @@
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.8.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,ensureActionCredit,refreshWallet:refreshWalletUI};
+  window.ControlPhi={version:'1.8.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,ensureActionCredit,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
