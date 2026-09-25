@@ -159,7 +159,7 @@
     document.querySelectorAll('[data-control-phi-wallet-quants]').forEach(el=>{const value=String(snapshot.quants);if(el.textContent!==value)el.textContent=value});
     document.querySelectorAll('[data-control-phi-wallet-infinity]').forEach(el=>{const value=String(snapshot.infinity);if(el.textContent!==value)el.textContent=value});
     const button=document.getElementById('controlPhiWalletButton');
-    if(button)button.innerHTML=`<span aria-hidden="true">⭐</span><strong>${snapshot.balance}</strong><small>${snapshot.progressToNextCoin}/10</small>`;
+    if(button)button.innerHTML=`<span class="cp-wallet-button-label">Wallet</span><span aria-hidden="true">⭐</span><strong>${snapshot.balance}</strong><small>${snapshot.progressToNextCoin}/10</small>`;
     const name=document.querySelector('[data-control-phi-wallet-name]');
     if(name)name.textContent=snapshot.username;
     return snapshot;
@@ -256,7 +256,7 @@
     const button=existingTrigger||document.createElement('button');
     button.id='controlPhiWalletButton';button.type='button';button.setAttribute('aria-label','Open unified wallet');button.setAttribute('aria-expanded','false');
     const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Q</small></div><div class="cp-wallet-asset"><span>Infinity</span><strong data-control-phi-wallet-infinity>0</strong><small>Infinity</small></div></div><p>Balances update automatically from the shared StarQuest/Control Phi wallet and connected Phi systems. No manual transfer is required to see them here.</p>';
-    const host=document.querySelector('.head-actions');
+    const host=document.querySelector('.head-actions,.qbalances,[data-control-phi-wallet-host]');
     if(!existingTrigger){if(host)host.appendChild(button);else{button.classList.add('control-phi-wallet-floating');document.body.appendChild(button)}}
     document.body.appendChild(panel);
     const toggle=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)refreshWalletUI()};
