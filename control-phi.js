@@ -416,7 +416,32 @@
     function filter(){const term=input.value.trim().toLowerCase();nav.querySelectorAll('a').forEach(a=>a.hidden=!!term&&!a.textContent.toLowerCase().includes(term))}input.addEventListener('input',filter);
   }
 
-  window.ControlPhi={version:'1.8.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,ensureActionCredit,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI};
+  const AD_PHI_ENDPOINT='https://ad-phi.marvaseater.workers.dev';
+  const SENSITIVE_AD_TOPICS=/\b(politic|election|religion|health|medical|sexual|race|ethnic|disability|addiction)\b/i;
+  function safeAdTopic(input){
+    const value=String(input||'').trim().toLowerCase().replace(/\s+/g,' ').slice(0,80);
+    return value&&!SENSITIVE_AD_TOPICS.test(value)?value:'';
+  }
+  async function requestSponsoredCard(topic,placement='phi'){
+    const safe=safeAdTopic(topic);if(!safe)return null;
+    const url=AD_PHI_ENDPOINT+'/v1/ads/next?topic='+encodeURIComponent(safe)+'&placement='+encodeURIComponent(String(placement||'phi').slice(0,80));
+    const response=await fetch(url,{cache:'no-store',credentials:'omit'});
+    const payload=await response.json().catch(()=>({}));
+    return response.ok&&payload?.ad?payload.ad:null;
+  }
+  async function renderSponsoredCard(host,topic,placement='phi'){
+    const el=typeof host==='string'?document.querySelector(host):host;if(!el)return null;
+    const ad=await requestSponsoredCard(topic,placement).catch(()=>null);
+    if(!ad){el.replaceChildren();el.hidden=true;return null}
+    el.hidden=false;el.replaceChildren();
+    const card=document.createElement('article');card.className='control-phi-sponsored-card';
+    const label=document.createElement('small');label.textContent='SPONSORED';
+    const title=document.createElement('strong');title.textContent=String(ad.title||'Sponsored');
+    const body=document.createElement('p');body.textContent=String(ad.body||'');
+    const link=document.createElement('a');link.href=String(ad.destinationUrl||'#');link.target='_blank';link.rel='noopener sponsored';link.textContent=String(ad.advertiser||'Visit advertiser');
+    card.append(label,title,body,link);el.append(card);return ad;
+  }
+  window.ControlPhi={version:'1.8.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,ensureActionCredit,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,requestSponsoredCard,renderSponsoredCard};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
