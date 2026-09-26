@@ -441,10 +441,23 @@
     const link=document.createElement('a');link.href=String(ad.destinationUrl||'#');link.target='_blank';link.rel='noopener sponsored';link.textContent=String(ad.advertiser||'Visit advertiser');
     card.append(label,title,body,link);el.append(card);return ad;
   }
+  function latestExplicitAdTopic(){
+    const items=read(INTEREST_KEY,[]);
+    if(!Array.isArray(items))return '';
+    for(let i=items.length-1;i>=0;i--){const x=items[i]||{};const t=safeAdTopic(x.query||x.title||x.topic||x.reference||'');if(t)return t}
+    return '';
+  }
+  function installSponsoredSlot(){
+    if(document.querySelector('[data-control-phi-ad]'))return;
+    const host=document.createElement('aside');host.dataset.controlPhiAd='1';host.setAttribute('aria-label','Sponsored');
+    host.style.cssText='margin:12px auto;padding:10px;max-width:760px;border:1px solid rgba(127,127,127,.35);border-radius:12px;';
+    const mount=()=>{if(!document.body.contains(host))document.body.appendChild(host);const t=latestExplicitAdTopic();if(t)renderSponsoredCard(host,t,location.pathname).catch(()=>{});else host.hidden=true};
+    mount();setInterval(mount,30000);
+  }
   window.ControlPhi={version:'1.8.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,ensureShareCredit,ensureActionCredit,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,requestSponsoredCard,renderSponsoredCard};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
-  const boot=()=>WALLET_ONLY?injectWallet():injectRemote();
+  const boot=()=>{WALLET_ONLY?injectWallet():injectRemote();installSponsoredSlot()};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
