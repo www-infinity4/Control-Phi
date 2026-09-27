@@ -288,10 +288,8 @@
     const prebuilt=document.getElementById('controlPhiWalletButton');
     const prebuiltPanel=document.getElementById('controlPhiWalletPanel');
     if(prebuilt&&prebuiltPanel){
-      if(prebuilt.dataset.controlPhiWalletBound!=='1'){
-        prebuilt.addEventListener('click',()=>{prebuiltPanel.hidden=!prebuiltPanel.hidden;prebuilt.setAttribute('aria-expanded',String(!prebuiltPanel.hidden));if(!prebuiltPanel.hidden)refreshWalletUI()});
-        prebuilt.dataset.controlPhiWalletBound='1';
-      }
+      prebuilt.onclick=event=>{event.stopPropagation();prebuiltPanel.hidden=!prebuiltPanel.hidden;prebuilt.setAttribute('aria-expanded',String(!prebuiltPanel.hidden));if(!prebuiltPanel.hidden)refreshWalletUI()};
+      prebuilt.dataset.controlPhiWalletBound='1';
       injectWalletIntoMenu();watchWalletMenu();refreshWalletUI();return
     }
     const existingTrigger=prebuilt||document.querySelector('[data-control-phi-wallet-trigger]');
@@ -306,7 +304,7 @@
     if(!existingTrigger){if(host)host.appendChild(button);else{button.classList.add('control-phi-wallet-floating');document.body.appendChild(button)}}
     document.body.appendChild(panel);
     const toggle=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)refreshWalletUI()};
-    button.addEventListener('click',toggle);button.dataset.controlPhiWalletBound='1';
+    button.onclick=event=>{event.stopPropagation();toggle()};button.dataset.controlPhiWalletBound='1';
     document.addEventListener('click',event=>{if(panel.hidden||event.target===button||button.contains(event.target)||panel.contains(event.target)||event.target?.closest?.('#controlPhiWalletMenuButton'))return;panel.hidden=true;button.setAttribute('aria-expanded','false')});
     injectWalletIntoMenu();
     watchWalletMenu();
