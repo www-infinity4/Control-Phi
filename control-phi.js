@@ -129,7 +129,7 @@
   }
 
   function auxiliaryBalances(){
-    let quants=0,infinity=0;
+    let quants=0,infinity=0,musicQuants=0;
     try{
       const state=read('infinity_unified_wallet_v1',null);
       const id=state?.currentWalletId;
@@ -137,17 +137,20 @@
       if(w?.balances){
         quants=Math.max(0,Number(w.balances.QUANT)||0);
         infinity=Math.max(0,Number(w.balances.INFINITY)||0);
+        musicQuants=Math.max(0,Number(w.balances.MUSIC_QUANT)||0);
       }
+      musicQuants=Math.max(musicQuants,Math.max(0,Number(state?.musicQuants)||0));
     }catch{}
     try{quants=Math.max(quants,Math.max(0,Number(localStorage.getItem('quantaPhiTokens'))||0))}catch{}
-    return {quants,infinity};
+    try{musicQuants=Math.max(musicQuants,(JSON.parse(localStorage.getItem('musicPhi:quants:v1')||'[]')||[]).length)}catch{}
+    return {quants,infinity,musicQuants};
   }
 
   function walletSnapshot(){
     const store=walletStore();
     const wallet=normalizeWallet(store.profile);
     const assets=auxiliaryBalances();
-    return {balance:wallet.tokens,starCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',quants:assets.quants,infinity:assets.infinity};
+    return {balance:wallet.tokens,starCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',quants:assets.quants,infinity:assets.infinity,musicQuants:assets.musicQuants};
   }
 
   function importLegacyStarCoinBalance(amount,source='legacy'){
@@ -192,6 +195,7 @@
     document.querySelectorAll('[data-control-phi-wallet-menu-progress]').forEach(el=>{const value=`${snapshot.progressToNextCoin}/10`;if(el.textContent!==value)el.textContent=value});
     document.querySelectorAll('[data-control-phi-wallet-quants]').forEach(el=>{const value=String(snapshot.quants);if(el.textContent!==value)el.textContent=value});
     document.querySelectorAll('[data-control-phi-wallet-infinity]').forEach(el=>{const value=String(snapshot.infinity);if(el.textContent!==value)el.textContent=value});
+    document.querySelectorAll('[data-control-phi-wallet-music-quants]').forEach(el=>{const value=String(snapshot.musicQuants);if(el.textContent!==value)el.textContent=value});
     const button=document.getElementById('controlPhiWalletButton');
     if(button)button.innerHTML=`<span class="cp-wallet-button-label">Wallet</span><span aria-hidden="true">⭐</span><strong>${snapshot.balance}</strong><small>${snapshot.progressToNextCoin}/10</small>`;
     const name=document.querySelector('[data-control-phi-wallet-name]');
@@ -266,7 +270,7 @@
       item.id='controlPhiWalletMenuButton';
       item.type='button';
       item.setAttribute('aria-label','Open StarCoin wallet');
-      item.innerHTML='<span aria-hidden="true">⭐</span><span class="cp-wallet-menu-name"><strong>Unified Wallet</strong><small>StarCoin · Quants · Infinity</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-wallet-menu-balance>0 ⭐</strong><small><span data-control-phi-wallet-quants>0</span> Q · <span data-control-phi-wallet-infinity>0</span> Infinity</small></span>';
+      item.innerHTML='<span aria-hidden="true">⭐</span><span class="cp-wallet-menu-name"><strong>Unified Wallet</strong><small>StarCoin · Quants · Music Quants · Infinity</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-wallet-menu-balance>0 ⭐</strong><small><span data-control-phi-wallet-quants>0</span> Q · <span data-control-phi-wallet-music-quants>0</span> MQ · <span data-control-phi-wallet-infinity>0</span> Infinity</small></span>';
       item.addEventListener('click',()=>document.getElementById('controlPhiWalletButton')?.click());
     }
     if(item.parentElement!==nav)nav.prepend(item);
@@ -286,11 +290,11 @@
     const existingTrigger=prebuilt||document.querySelector('[data-control-phi-wallet-trigger]');
     const style=document.createElement('style');
     style.id='controlPhiWalletStyle';
-    style.textContent='#controlPhiWalletButton{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:#141923;color:#fff;font:800 13px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.22)}#controlPhiWalletButton small{opacity:.72;font-size:10px}#controlPhiWalletButton.control-phi-wallet-floating{position:fixed;right:68px;bottom:16px;z-index:10001;background:#0b1020}#controlPhiWalletPanel{position:fixed;right:16px;bottom:68px;z-index:10002;width:min(330px,calc(100vw - 32px));padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:#080b12;color:#fff;box-shadow:0 24px 70px rgba(0,0,0,.58);font:500 14px/1.45 system-ui,sans-serif}#controlPhiWalletPanel[hidden]{display:none}#controlPhiWalletPanel .cp-wallet-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:7px 0}#controlPhiWalletPanel .cp-wallet-assets{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:10px 0}#controlPhiWalletPanel .cp-wallet-asset{border:1px solid rgba(255,255,255,.13);border-radius:11px;padding:9px 6px;text-align:center;background:#111827}#controlPhiWalletPanel .cp-wallet-asset span,#controlPhiWalletPanel .cp-wallet-asset small{display:block;font-size:10px;color:#cbd5e1}#controlPhiWalletPanel .cp-wallet-asset strong{display:block;font-size:18px;margin:3px 0}#controlPhiWalletPanel strong{font-size:18px}#controlPhiWalletPanel p{margin:10px 0 0;color:#cbd5e1;font-size:12px}#controlPhiWalletMenuButton{width:100%;min-height:50px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:9px 11px;margin:2px 0 5px;border:1px solid rgba(255,221,89,.34);border-radius:12px;background:linear-gradient(135deg,rgba(122,83,12,.38),rgba(18,15,9,.92));color:#fff;text-align:left;cursor:pointer;font:800 12px/1.2 system-ui,sans-serif}#controlPhiWalletMenuButton>span:first-child{font-size:18px}.cp-wallet-menu-name,.cp-wallet-menu-value{display:grid;gap:2px}.cp-wallet-menu-name small,.cp-wallet-menu-value small{font-size:10px;color:#d8c985}.cp-wallet-menu-value{justify-items:end}';
+    style.textContent='#controlPhiWalletButton{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:#141923;color:#fff;font:800 13px/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.22)}#controlPhiWalletButton small{opacity:.72;font-size:10px}#controlPhiWalletButton.control-phi-wallet-floating{position:fixed;right:68px;bottom:16px;z-index:10001;background:#0b1020}#controlPhiWalletPanel{position:fixed;right:16px;bottom:68px;z-index:10002;width:min(330px,calc(100vw - 32px));padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:#080b12;color:#fff;box-shadow:0 24px 70px rgba(0,0,0,.58);font:500 14px/1.45 system-ui,sans-serif}#controlPhiWalletPanel[hidden]{display:none}#controlPhiWalletPanel .cp-wallet-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:7px 0}#controlPhiWalletPanel .cp-wallet-assets{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:10px 0}#controlPhiWalletPanel .cp-wallet-asset{border:1px solid rgba(255,255,255,.13);border-radius:11px;padding:9px 6px;text-align:center;background:#111827}#controlPhiWalletPanel .cp-wallet-asset span,#controlPhiWalletPanel .cp-wallet-asset small{display:block;font-size:10px;color:#cbd5e1}#controlPhiWalletPanel .cp-wallet-asset strong{display:block;font-size:18px;margin:3px 0}#controlPhiWalletPanel strong{font-size:18px}#controlPhiWalletPanel p{margin:10px 0 0;color:#cbd5e1;font-size:12px}#controlPhiWalletMenuButton{width:100%;min-height:50px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:9px;padding:9px 11px;margin:2px 0 5px;border:1px solid rgba(255,221,89,.34);border-radius:12px;background:linear-gradient(135deg,rgba(122,83,12,.38),rgba(18,15,9,.92));color:#fff;text-align:left;cursor:pointer;font:800 12px/1.2 system-ui,sans-serif}#controlPhiWalletMenuButton>span:first-child{font-size:18px}.cp-wallet-menu-name,.cp-wallet-menu-value{display:grid;gap:2px}.cp-wallet-menu-name small,.cp-wallet-menu-value small{font-size:10px;color:#d8c985}.cp-wallet-menu-value{justify-items:end}';
     document.head.appendChild(style);
     const button=existingTrigger||document.createElement('button');
     button.id='controlPhiWalletButton';button.type='button';button.setAttribute('aria-label','Open unified wallet');button.setAttribute('aria-expanded','false');
-    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Q</small></div><div class="cp-wallet-asset"><span>Infinity</span><strong data-control-phi-wallet-infinity>0</strong><small>Infinity</small></div></div><p>Balances update automatically from the shared StarQuest/Control Phi wallet and connected Phi systems. No manual transfer is required to see them here.</p>';
+    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Q</small></div><div class="cp-wallet-asset"><span>Music Quants</span><strong data-control-phi-wallet-music-quants>0</strong><small>MQ · playable</small></div><div class="cp-wallet-asset"><span>Infinity</span><strong data-control-phi-wallet-infinity>0</strong><small>Infinity</small></div></div><p>Balances update automatically from the shared StarQuest/Control Phi wallet and connected Phi systems. No manual transfer is required to see them here.</p>';
     const host=document.querySelector('.head-actions,.qbalances,[data-control-phi-wallet-host]');
     if(!existingTrigger){if(host)host.appendChild(button);else{button.classList.add('control-phi-wallet-floating');document.body.appendChild(button)}}
     document.body.appendChild(panel);
