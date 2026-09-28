@@ -171,11 +171,30 @@
     return {quants,infinity,musicQuants};
   }
 
+  function alienCoinCount(){
+    try{
+      const cached=Number(sessionStorage.getItem('controlPhi:alienCoinCount:v1'));
+      return Number.isFinite(cached)&&cached>=0?cached:0;
+    }catch{return 0}
+  }
+
+  async function refreshAlienCoinCount(){
+    let session='';try{session=localStorage.getItem('alien-coin-wallet-session-v1')||''}catch{}
+    if(!session){try{sessionStorage.setItem('controlPhi:alienCoinCount:v1','0')}catch{};refreshWalletUI();return 0}
+    try{
+      const response=await fetch('https://alien-coin.marvaseater.workers.dev/api/tokens',{headers:{Authorization:'Bearer '+session},cache:'no-store'});
+      const data=await response.json();
+      const count=response.ok&&Array.isArray(data.tokens)?data.tokens.length:0;
+      try{sessionStorage.setItem('controlPhi:alienCoinCount:v1',String(count))}catch{}
+      refreshWalletUI();return count;
+    }catch{return alienCoinCount()}
+  }
+
   function walletSnapshot(){
     const store=walletStore();
     const wallet=normalizeWallet(store.profile);
     const assets=auxiliaryBalances();
-    return {balance:wallet.tokens,starCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',quants:assets.quants,infinity:assets.infinity,musicQuants:assets.musicQuants};
+    return {balance:wallet.tokens,starCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',quants:assets.quants,infinity:assets.infinity,musicQuants:assets.musicQuants,alienCoins:alienCoinCount()};
   }
 
   function importLegacyStarCoinBalance(amount,source='legacy'){
@@ -221,6 +240,7 @@
     document.querySelectorAll('[data-control-phi-wallet-quants]').forEach(el=>{const value=String(snapshot.quants);if(el.textContent!==value)el.textContent=value});
     document.querySelectorAll('[data-control-phi-wallet-infinity]').forEach(el=>{const value=String(snapshot.infinity);if(el.textContent!==value)el.textContent=value});
     document.querySelectorAll('[data-control-phi-wallet-music-quants]').forEach(el=>{const value=String(snapshot.musicQuants);if(el.textContent!==value)el.textContent=value});
+    document.querySelectorAll('[data-control-phi-wallet-alien-coins]').forEach(el=>{const value=String(snapshot.alienCoins);if(el.textContent!==value)el.textContent=value});
     const button=document.getElementById('controlPhiWalletButton');
     if(button)button.innerHTML=`<span class="cp-wallet-button-label">Wallet</span><span aria-hidden="true">⭐</span><strong>${snapshot.balance}</strong><small>${snapshot.progressToNextCoin}/10</small>`;
     const name=document.querySelector('[data-control-phi-wallet-name]');
@@ -295,7 +315,7 @@
       item.id='controlPhiWalletMenuButton';
       item.type='button';
       item.setAttribute('aria-label','Open StarCoin wallet');
-      item.innerHTML='<span aria-hidden="true">⭐</span><span class="cp-wallet-menu-name"><strong>Unified Wallet</strong><small>StarCoin · Quants · Music Quants · Infinity</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-wallet-menu-balance>0 ⭐</strong><small><span data-control-phi-wallet-quants>0</span> Q · <span data-control-phi-wallet-music-quants>0</span> MQ · <span data-control-phi-wallet-infinity>0</span> Infinity</small></span>';
+      item.innerHTML='<span aria-hidden="true">⭐</span><span class="cp-wallet-menu-name"><strong>Unified Wallet</strong><small>StarCoin · Quants · Music Quants · Infinity · Alien Coin</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-wallet-menu-balance>0 ⭐</strong><small><span data-control-phi-wallet-quants>0</span> Q · <span data-control-phi-wallet-music-quants>0</span> MQ · <span data-control-phi-wallet-infinity>0</span> Infinity · <span data-control-phi-wallet-alien-coins>0</span> Alien</small></span>';
       item.addEventListener('click',()=>document.getElementById('controlPhiWalletButton')?.click());
     }
     if(item.parentElement!==nav)nav.prepend(item);
@@ -324,7 +344,7 @@
     document.head.appendChild(style);
     const button=existingTrigger||document.createElement('button');
     button.id='controlPhiWalletButton';button.type='button';button.setAttribute('aria-label','Open unified wallet');button.setAttribute('aria-expanded','false');
-    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Q</small></div><div class="cp-wallet-asset"><span>Music Quants</span><strong data-control-phi-wallet-music-quants>0</strong><small>MQ · playable</small></div><div class="cp-wallet-asset"><span>Infinity</span><strong data-control-phi-wallet-infinity>0</strong><small>Infinity</small></div></div><p>Balances update automatically from the shared StarQuest/Control Phi wallet and connected Phi systems. No manual transfer is required to see them here.</p>';
+    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Q</small></div><div class="cp-wallet-asset"><span>Music Quants</span><strong data-control-phi-wallet-music-quants>0</strong><small>MQ · playable</small></div><div class="cp-wallet-asset"><span>Infinity</span><strong data-control-phi-wallet-infinity>0</strong><small>Infinity</small></div><div class="cp-wallet-asset"><span>Alien Coins</span><strong data-control-phi-wallet-alien-coins>0</strong><small>secured tokens</small></div></div><p>Balances update automatically from the shared StarQuest/Control Phi wallet and connected Phi systems. No manual transfer is required to see them here.</p>';
     const host=document.querySelector('.head-actions,.qbalances,[data-control-phi-wallet-host]');
     if(!existingTrigger){if(host)host.appendChild(button);else{button.classList.add('control-phi-wallet-floating');document.body.appendChild(button)}}
     document.body.appendChild(panel);
@@ -334,6 +354,7 @@
     injectWalletIntoMenu();
     watchWalletMenu();
     refreshWalletUI();
+    refreshAlienCoinCount();
   }
 
   function recordShare(input={}){
