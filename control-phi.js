@@ -15,6 +15,7 @@
   const WALLET_GUEST_KEY='starquest_guest_profile_v1';
   const WALLET_SESSION_KEY='starquest_session';
   const WALLET_USERS_KEY='starquest_users';
+  const SHOP_CART_KEY='infinity_phi_shop_cart_v1';
   const MAX_SHARES=500;
   const DEDUPE_WINDOW_MS=1500;
 
@@ -306,6 +307,10 @@
     return detail;
   }
 
+  function shopCart(){const items=read(SHOP_CART_KEY,[]);return Array.isArray(items)?items:[]}
+
+  function reconcileCollectedAds(){const items=shopCart();let credited=0;items.forEach(item=>{const ref=clean(item?.id||item?.url||item?.title,700);if(!ref)return;const result=ensureActionCredit(ref,'collect');if(!result?.alreadyRecorded)credited+=1});return {items:items.length,credited,...walletSnapshot()}}
+
   function injectWalletIntoMenu(){
     const nav=document.querySelector('details.channel-menu nav,details[data-channel-menu] nav,.qmenu,#controlPhiPanel .control-phi-links');
     if(!nav)return;
@@ -319,6 +324,7 @@
       item.addEventListener('click',()=>document.getElementById('controlPhiWalletButton')?.click());
     }
     if(item.parentElement!==nav)nav.prepend(item);
+    let cart=document.getElementById('controlPhiShopCartMenuButton');if(!cart){cart=document.createElement('button');cart.id='controlPhiShopCartMenuButton';cart.type='button';cart.innerHTML='<span aria-hidden="true">🛒</span><span class="cp-wallet-menu-name"><strong>Shopping Cart</strong><small>Collected advertisements</small></span><span class="cp-wallet-menu-value"><strong data-control-phi-cart-count>0</strong><small>saved ads</small></span>';cart.addEventListener('click',()=>location.assign('https://www-infinity4.github.io/Shop-Phi/?view=cart'))}if(cart.parentElement!==nav)item.insertAdjacentElement('afterend',cart);document.querySelectorAll('[data-control-phi-cart-count]').forEach(el=>el.textContent=String(shopCart().length));
     refreshWalletUI();
   }
 
@@ -426,6 +432,7 @@
     });
     window.addEventListener('starquest:share-progress',refreshWalletUI);
     window.addEventListener('controlphi:wallet-change',refreshWalletUI);
+    window.addEventListener('infinity-shop-cart-updated',()=>{reconcileCollectedAds();injectWalletIntoMenu()});
   }
 
   function injectCosmo(){
@@ -510,11 +517,11 @@
     const mount=()=>{if(!document.body.contains(host))document.body.appendChild(host);const t=latestExplicitAdTopic();if(t)renderSponsoredCard(host,t,location.pathname).catch(()=>{});else host.hidden=true};
     mount();setInterval(mount,30000);
   }
-  window.ControlPhi={version:'1.8.1',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,requestSponsoredCard,renderSponsoredCard};
+  window.ControlPhi={version:'1.9.0',recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,reconcileCollectedAds,shopCart,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,requestSponsoredCard,renderSponsoredCard};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
   installContextBridge();
-  const boot=()=>{WALLET_ONLY?injectWallet():injectRemote();installSponsoredSlot()};
+  const boot=()=>{WALLET_ONLY?injectWallet():injectRemote();reconcileCollectedAds();installSponsoredSlot()};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
