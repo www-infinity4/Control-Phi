@@ -168,6 +168,7 @@
 
   function canonicalSearchCounts(){
     const records=new Map();
+    const fp=value=>{const text=JSON.stringify(value||{});let h=2166136261;for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(36)};
     const put=(id,source,query='')=>{
       id=clean(id,500);if(!id)return;
       const current=records.get(id)||{id,source:'legacy',query:''};
@@ -196,11 +197,11 @@
     }catch{}
     try{
       const omni=JSON.parse(localStorage.getItem('omniPhi:history:v1')||'[]');
-      if(Array.isArray(omni))omni.forEach(item=>put(item?.tokenId||item?.id,'omni',item?.query));
+      if(Array.isArray(omni))omni.forEach(item=>{const query=String(item?.query||'').trim(),createdAt=String(item?.createdAt||''),id=item?.tokenId||item?.id||('omni-history-'+fp(['omni',query,createdAt]));if(query)put(id,'omni',query)});
     }catch{}
     try{
       const quanta=JSON.parse(localStorage.getItem('quantaPhiBuildHistoryV1')||'[]');
-      if(Array.isArray(quanta))quanta.forEach(item=>put(item?.token_id||item?.tokenId||item?.id,'quanta',item?.query));
+      if(Array.isArray(quanta))quanta.forEach(item=>{const query=String(item?.query||'').trim(),createdAt=String(item?.created_at||item?.createdAt||''),id=item?.token_id||item?.tokenId||item?.id||('quant-history-'+fp(['quanta',query,createdAt]));if(query)put(id,'quanta',query)});
     }catch{}
     try{
       const state=read('infinity_unified_wallet_v1',null);
@@ -241,8 +242,8 @@
     try{quants=Math.max(quants,Math.max(0,Number(localStorage.getItem('quantaPhiTokens'))||0))}catch{}
     try{const playable=(JSON.parse(localStorage.getItem('musicPhi:quants:v1')||'[]')||[]).length,listening=(JSON.parse(localStorage.getItem('musicPhi:listeningQuants:v1')||'[]')||[]).length;musicQuants=Math.max(musicQuants,playable+listening)}catch{}
     return {
-      quants:Math.max(quants,canonical.quants),
-      infinity:Math.max(infinity,canonical.infinity),
+      quants:canonical.quants,
+      infinity:canonical.infinity,
       omni:canonical.omni,
       legacy:canonical.legacy,
       total:canonical.total,
