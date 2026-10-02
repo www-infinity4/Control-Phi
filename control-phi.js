@@ -200,6 +200,12 @@
       if(Array.isArray(omni))omni.forEach(item=>{const query=String(item?.query||'').trim(),createdAt=String(item?.createdAt||''),id=item?.tokenId||item?.id||('omni-history-'+fp(['omni',query,createdAt]));if(query)put(id,'omni',query)});
     }catch{}
     try{
+      const pending=JSON.parse(localStorage.getItem('omniPhi:pendingInfinitySearches:v1')||'[]');
+      if(Array.isArray(pending))pending.forEach(item=>{const id=item?.tokenId||item?.id;if(item?.query&&id)put(id,'omni',item.query)});
+      const last=JSON.parse(localStorage.getItem('omniPhi:lastSearchToken:v1')||'null');
+      if(last?.query&&(last?.tokenId||last?.id))put(last.tokenId||last.id,'omni',last.query);
+    }catch{}
+    try{
       const quanta=JSON.parse(localStorage.getItem('quantaPhiBuildHistoryV1')||'[]');
       if(Array.isArray(quanta))quanta.forEach(item=>{const query=String(item?.query||'').trim(),createdAt=String(item?.created_at||item?.createdAt||''),id=item?.token_id||item?.tokenId||item?.id||('quant-history-'+fp(['quanta',query,createdAt]));if(query)put(id,'quanta',query)});
     }catch{}
@@ -213,7 +219,10 @@
       const session=read(WALLET_SESSION_KEY,null),users=read(WALLET_USERS_KEY,{}),profiles=[];
       if(session?.key&&users?.[session.key])profiles.push(users[session.key]);
       profiles.push(read(WALLET_GUEST_KEY,{}));
-      profiles.forEach(profile=>(Array.isArray(profile?.infinitySearches)?profile.infinitySearches:[]).forEach(item=>{const id=item?.tokenId||item?.id;put(id,classify(item,id),item?.query)}));
+      profiles.forEach(profile=>{
+        (Array.isArray(profile?.infinitySearches)?profile.infinitySearches:[]).forEach(item=>{const id=item?.tokenId||item?.id;put(id,classify(item,id),item?.query)});
+        (Array.isArray(profile?.infinityLedger)?profile.infinityLedger:[]).forEach(item=>{const id=item?.tokenId||item?.id;put(id,classify(item,id),item?.query)});
+      });
     }catch{}
     let infinity=0,omni=0,quants=0,legacy=0;
     records.forEach(item=>{if(item.source==='quanta')quants++;else if(item.source==='omni')omni++;else if(item.source==='infinity')infinity++;else legacy++});
