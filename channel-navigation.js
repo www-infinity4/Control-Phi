@@ -3,14 +3,14 @@
   if(window.__INFINITY_CANONICAL_CHANNEL_NAV__)return;
   window.__INFINITY_CANONICAL_CHANNEL_NAV__=true;
 
-  const ROOT='https://quantaphi.org/';
+  const ROOT='https://www-infinity4.github.io/';
   const REGISTRY=ROOT+'Control-Phi/channels.json';
   let channels=[];
   let loadPromise=null;
 
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const key=value=>clean(value).toLowerCase();
-  const canonicalPath=path=>{const p=clean(path);return p==='C13b0/phi'?'phi':encodeURIComponent(p).replace(/%2F/gi,'/')};
+  const canonicalPath=path=>encodeURIComponent(clean(path)).replace(/%2F/gi,'/');
 
   async function load(){
     if(channels.length)return channels;
