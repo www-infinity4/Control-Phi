@@ -479,7 +479,7 @@
         // Use the same authenticated StarQuest device as the wallet state read.
         // An unrelated Infinity token must not authorize StarCoin rewards.
         const response=await phiCloudFetch(STARQUEST_ENDPOINT+'/v1/shares',{
-          method:'POST',body:{attemptId:receipt.attemptId,contentId:receipt.contentId,method:receipt.method},
+          method:'POST',body:JSON.stringify({attemptId:receipt.attemptId,contentId:receipt.contentId,method:receipt.method}),
           signal:AbortSignal.timeout(8000),cache:'no-store'
         });
         const data=await response.json().catch(()=>({}));
