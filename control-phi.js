@@ -470,15 +470,30 @@
   }
   async function flushStarReceipts(){
     if(rewardSyncing)return;
-    const Wallet=window.InfinityCloudWallet||window.InfinityUnifiedWallet;
-    if(!Wallet)return;
-    let token;try{token=new Wallet({appName:document.title}).token()}catch{return}
+    const pending=read(REWARD_QUEUE,[]);
+    if(!Array.isArray(pending)||!pending.length)return;
     rewardSyncing=true;
-    try{for(const receipt of read(REWARD_QUEUE,[])){
-      const response=await fetch('https://starquest-ledger.marvaseater.workers.dev/v1/shares',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(receipt),signal:AbortSignal.timeout(8000)});
-      if(!response.ok)break;
-      write(REWARD_QUEUE,read(REWARD_QUEUE,[]).filter(x=>x.attemptId!==receipt.attemptId));
-    }}catch(error){console.warn('Star Coin receipt saved for retry',error)}finally{rewardSyncing=false}
+    let confirmed=0;
+    try{
+      for(const receipt of pending){
+        // Use the same authenticated StarQuest device as the wallet state read.
+        // An unrelated Infinity token must not authorize StarCoin rewards.
+        const response=await phiCloudFetch(STARQUEST_ENDPOINT+'/v1/shares',{
+          method:'POST',body:{attemptId:receipt.attemptId,contentId:receipt.contentId,method:receipt.method},
+          signal:AbortSignal.timeout(8000),cache:'no-store'
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok||data.ok!==true)break;
+        const queue=read(REWARD_QUEUE,[]);
+        write(REWARD_QUEUE,queue.filter(item=>item.attemptId!==receipt.attemptId));
+        confirmed+=1;
+      }
+    }catch(error){
+      if(error?.message!=='ledger_not_connected')console.warn('Star Coin receipt saved for retry',error);
+    }finally{
+      rewardSyncing=false;
+      if(confirmed)void refreshStarCoinCloud();
+    }
   }
   for(const event of ['load','online','focus'])window.addEventListener(event,flushStarReceipts);
   document.addEventListener('starquest:ledger-connected',flushStarReceipts);
@@ -742,7 +757,7 @@
     const mount=()=>{if(!document.body.contains(host))document.body.appendChild(host);const t=latestExplicitAdTopic();if(t)renderSponsoredCard(host,t,location.pathname).catch(()=>{});else host.hidden=true};
     mount();setInterval(mount,30000);
   }
-  window.ControlPhi={version:'1.9.2',sourceCounts:canonicalSearchCounts,recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,reconcileCollectedAds,shopCart,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,refreshCloudWallet:refreshCloudBalances,requestSponsoredCard,renderSponsoredCard};
+  window.ControlPhi={version:'1.9.3',sourceCounts:canonicalSearchCounts,recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,reconcileCollectedAds,shopCart,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,refreshCloudWallet:refreshCloudBalances,requestSponsoredCard,renderSponsoredCard};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
