@@ -3,13 +3,13 @@
   if(window.__INFINITY_CHANNEL_REMOTE_CORE__)return;
   window.__INFINITY_CHANNEL_REMOTE_CORE__=true;
 
-  const ROOT='https://www-infinity4.github.io/';
+  const ROOT='https://quantaphi.org/';
   const ASSET_ROOT=ROOT+'Control-Phi/';
   const REGISTRY=ASSET_ROOT+'channels.json';
   const VERSION='1.0.0';
 
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
-  const canonicalPath=path=>encodeURIComponent(clean(path)).replace(/%2F/gi,'/');
+  const canonicalPath=path=>{const p=clean(path);return p==='C13b0/phi'?'phi':encodeURIComponent(p).replace(/%2F/gi,'/')};
   const hrefFor=item=>ROOT+canonicalPath(item.path)+'/';
 
   function ensureCss(){
