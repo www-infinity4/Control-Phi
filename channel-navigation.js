@@ -3,7 +3,7 @@
   if(window.__INFINITY_CANONICAL_CHANNEL_NAV__)return;
   window.__INFINITY_CANONICAL_CHANNEL_NAV__=true;
 
-  const ROOT='https://www-infinity4.github.io/';
+  const ROOT='https://quantaphi.org/';
   const REGISTRY=ROOT+'Control-Phi/channels.json';
   let channels=[];
   let loadPromise=null;
@@ -45,11 +45,13 @@
   document.addEventListener('click',async event=>{
     const anchor=event.target?.closest?.('a[href]');
     if(!isChannelAnchor(anchor))return;
+    // Cancel synchronously before asynchronous registry loading.
+    event.preventDefault();
     await load();
     const channel=resolveFromAnchor(anchor);
-    if(!channel)return;
+    if(!channel){location.assign(anchor.href);return;}
     const destination=ROOT+canonicalPath(channel.path)+'/';
-    if(anchor.href===destination)return;
+    if(anchor.href===destination){location.assign(destination);return;}
     event.preventDefault();
     event.stopImmediatePropagation();
     location.assign(destination);
