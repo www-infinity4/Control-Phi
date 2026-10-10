@@ -2,7 +2,7 @@
   'use strict';
   if(window.ControlPhi?.version)return;
 
-  const ROOT='https://www-infinity4.github.io/';
+  const ROOT='https://quantaphi.org/';
   const scriptElement=document.currentScript;
   const scriptSource=scriptElement?.src||`${ROOT}Control-Phi/control-phi.js`;
   const WALLET_ONLY=scriptElement?.dataset?.controlPhiWalletOnly==='true';
@@ -253,30 +253,106 @@
     }catch{return ''}
   }
   async function phiCloudFetch(target,options={}){
-    const bridge=window.QuantaCloudConnection||window.StarQuestCloudLedger;
+    // StarQuest's own state endpoint uses its existing enrolled device token.
+    // The Quant bridge intentionally accepts only Quant and Infinity routes.
+    const bridge=new URL(target).origin===STARQUEST_ENDPOINT?null:(window.QuantaCloudConnection||window.StarQuestCloudLedger);
     if(bridge?.authenticatedFetch){try{return await bridge.authenticatedFetch(target,options)}catch(error){if(error?.message!=='ledger_not_connected')throw error}}
     const token=starQuestDeviceToken();if(!token)throw new Error('ledger_not_connected');
     const body=options.body&&typeof options.body==='object'?JSON.stringify(options.body):options.body;
     return fetch(target,{...options,body,headers:{...(options.headers||{}),'content-type':'application/json',authorization:'Bearer '+token},cache:options.cache||'no-store'});
   }
   let cloudStarState=null;
+  let starCloudSyncStatus='Cached • checking StarQuest';
+  let starCloudReadNumber=0;
+  function setStarCloudStatus(message){
+    starCloudSyncStatus=String(message||'');
+    for(const item of document.querySelectorAll('[data-control-phi-star-sync]')){
+      item.textContent=starCloudSyncStatus;
+      item.dataset.confirmed=starCloudSyncStatus.startsWith('StarQuest confirmed')?'true':'false';
+    }
+  }
   async function refreshStarCoinCloud(){
+    const readNumber=++starCloudReadNumber;
+    const session=read(WALLET_SESSION_KEY,null);
+    // session.key can be a masked/rotating wallet ID, not the account's username.
+    // Compare the authenticated StarQuest username only to a real username;
+    // still reject stale replies if the selected local account changes.
+    const sessionKey=String(session?.key||'');
+    const profiles=read(WALLET_USERS_KEY,{});
+    const accountName=String(session?.username||profiles?.[sessionKey]?.username||'').trim().toLowerCase();
+    setStarCloudStatus('Checking StarQuest…');
     try{
-      const response=await phiCloudFetch(STARQUEST_ENDPOINT+'/v1/state',{cache:'no-store'});
-      const payload=await response.json().catch(()=>({}));
-      if(!response.ok||!payload?.ok||!payload?.state)return null;
-      const state=payload.state,store=walletStore(),wallet=normalizeWallet(store.profile);
-      wallet.tokens=Math.max(0,Number(state.starCoins)||0);
-      wallet.pendingShareCredits=Math.max(0,Math.min(9,Number(state.pendingShareCredits)||0));
-      wallet.shareCount=Math.max(0,Number(state.shareCount)||0);
-      if(Array.isArray(state.ledger)&&state.ledger.length)wallet.ledger=state.ledger.slice(-500);
-      if(Array.isArray(state.watchHistory))wallet.watchHistory=state.watchHistory.slice(-500);
-      if(state.username)wallet.username=String(state.username);
-      store.save(wallet);
-      cloudStarState={starCoins:wallet.tokens,pendingShareCredits:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',syncedAt:Date.now()};
+      // The older wallet reader returned an empty token if more than one
+      // enrollment existed. Reuse the identity resolver already verified by
+      // Quanta's payouts instead of silently leaving the cached total.
+      const tokens=[];
+      const add=token=>{if(/^sq_[A-Za-z0-9_-]{32,}$/.test(String(token||''))&&!tokens.includes(token))tokens.push(token)};
+      const bridge=window.QuantaCloudConnection;
+      if(typeof bridge?.resolveDeviceToken==='function'){
+        try{add(await bridge.resolveDeviceToken())}
+        catch(error){console.warn('StarQuest token resolution deferred',error)}
+      }
+      add(starQuestDeviceToken());
+      if(!tokens.length)throw new Error('ledger_not_connected');
+      let state=null,lastError='wallet_request_failed';
+      for(const token of tokens){
+        const response=await fetch(STARQUEST_ENDPOINT+'/v1/state',{
+          method:'GET',headers:{authorization:'Bearer '+token},cache:'no-store',
+          signal:AbortSignal.timeout(12000)
+        });
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok||!payload?.ok||!payload?.state){
+          lastError=String(payload?.error||('HTTP '+response.status));continue;
+        }
+        const candidate=payload.state;
+        if(accountName&&candidate.username&&String(candidate.username).trim().toLowerCase()!==accountName){
+          lastError='wallet_identity_mismatch';continue;
+        }
+        state=candidate;break;
+      }
+      if(!state)throw new Error(lastError);
+      if(readNumber!==starCloudReadNumber)return null;
+      const current=read(WALLET_SESSION_KEY,null);
+      if(sessionKey!==String(current?.key||''))return null;
+      const store=walletStore(),wallet=normalizeWallet(store.profile);
+      const confirmed={starCoins:Math.max(0,Number(state.starCoins)||0),
+        pendingShareCredits:Math.max(0,Math.min(9,Number(state.pendingShareCredits)||0)),
+        shareCount:Math.max(0,Number(state.shareCount)||0),
+        username:String(state.username||accountName||'Guest'),syncedAt:Date.now(),sessionKey};
+      // An unresolved masked account must never be written into the Guest record.
+      const mapped=wallet.key!=='__guest__'&&(!wallet.username||wallet.username==='Guest'||!state.username||String(wallet.username).trim().toLowerCase()===String(state.username).trim().toLowerCase());
+      if(mapped){
+        wallet.tokens=confirmed.starCoins;
+        wallet.pendingShareCredits=confirmed.pendingShareCredits;
+        wallet.shareCount=confirmed.shareCount;
+        if(Array.isArray(state.ledger)&&state.ledger.length){
+          const local=Array.isArray(wallet.ledger)?wallet.ledger:[];
+          const byId=new Map([...local,...state.ledger].map(x=>[x?.id||x?.referenceId,x]));
+          wallet.ledger=[...byId.values()].slice(-500);
+        }
+        if(Array.isArray(state.watchHistory))wallet.watchHistory=state.watchHistory.slice(-500);
+        if(state.username)wallet.username=String(state.username);
+        store.save(wallet);
+      }
+      cloudStarState=confirmed;
       refreshWalletUI();
+      setStarCloudStatus('StarQuest confirmed • '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}));
       return cloudStarState;
-    }catch(error){if(error?.message!=='ledger_not_connected')console.warn('Star Coin cloud refresh deferred',error);return null}
+    }catch(error){
+      if(readNumber===starCloudReadNumber)setStarCloudStatus('Cached balance • StarQuest sync pending');
+      if(error?.message!=='ledger_not_connected')console.warn('StarQuest wallet balance refresh deferred',error);
+      return null;
+    }
+  }
+  function refreshWalletOnOpen(){
+    refreshWalletUI();
+    // A modal cannot present an old saved number as if it were just checked.
+    void (async()=>{
+      await refreshStarCoinCloud();
+      try{await window.QuantaStarCoinCloud?.flush?.()}catch{}
+      try{await window.QuantaStarCoinCloud?.reconcile?.()}catch{}
+      await refreshStarCoinCloud();
+    })().catch(error=>console.warn('Wallet modal sync pending',error));
   }
 
   let cloudBalances={};
@@ -309,6 +385,8 @@
   window.addEventListener('phi:asset-balances',refreshWalletUI);
   window.addEventListener('musicquant:cloud-synced',refreshWalletUI);
   window.addEventListener('musicquant:changed',refreshWalletUI);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshStarCoinCloud()});
+  setInterval(()=>{if(!document.hidden)void refreshStarCoinCloud()},45000);
   function auxiliaryBalances(){
     let quants=0,infinity=0,musicQuants=0;
     const canonical=canonicalSearchCounts();
@@ -370,7 +448,11 @@
     const store=walletStore();
     const wallet=normalizeWallet(store.profile);
     const assets=auxiliaryBalances();
-    const starCoins=Math.round((wallet.tokens+(wallet.pendingShareCredits/10))*10)/10;return {balance:starCoins,starCoins,wholeStarCoins:wallet.tokens,progressToNextCoin:wallet.pendingShareCredits,shareCount:wallet.shareCount,username:wallet.username||'Guest',totalTokens:assets.total,quants:assets.quants,omni:assets.omni,infinity:assets.infinity,quantaWebsites:assets.quantaWebsites,legacy:assets.legacy,musicQuants:assets.musicQuants,pianoQuants:assets.pianoQuants,listeningQuants:assets.listeningQuants,alienCoins:alienCoinCount()};
+    const session=read(WALLET_SESSION_KEY,null);
+    const verified=cloudStarState&&cloudStarState.sessionKey===String(session?.key||'')?cloudStarState:null;
+    const whole=verified?verified.starCoins:wallet.tokens;
+    const tenths=verified?verified.pendingShareCredits:wallet.pendingShareCredits;
+    const starCoins=Math.round((whole+(tenths/10))*10)/10;return {balance:starCoins,starCoins,wholeStarCoins:whole,progressToNextCoin:tenths,shareCount:verified?verified.shareCount:wallet.shareCount,username:verified?verified.username:wallet.username||'Guest',totalTokens:assets.total,quants:assets.quants,omni:assets.omni,infinity:assets.infinity,quantaWebsites:assets.quantaWebsites,legacy:assets.legacy,musicQuants:assets.musicQuants,pianoQuants:assets.pianoQuants,listeningQuants:assets.listeningQuants,alienCoins:alienCoinCount()};
   }
 
   function importLegacyStarCoinBalance(amount,source='legacy'){
@@ -428,6 +510,7 @@
     if(button && button.innerHTML!==buttonMarkup)button.innerHTML=buttonMarkup;
     const name=document.querySelector('[data-control-phi-wallet-name]');
     if(name&&name.textContent!==snapshot.username)name.textContent=snapshot.username;
+    setStarCloudStatus(starCloudSyncStatus);
     return snapshot;
   }
 
@@ -578,7 +661,7 @@
     const prebuilt=document.getElementById('controlPhiWalletButton');
     const prebuiltPanel=document.getElementById('controlPhiWalletPanel');
     if(prebuilt&&prebuiltPanel){
-      prebuilt.onclick=event=>{event.stopPropagation();prebuiltPanel.hidden=!prebuiltPanel.hidden;prebuilt.setAttribute('aria-expanded',String(!prebuiltPanel.hidden));if(!prebuiltPanel.hidden)refreshWalletUI()};
+      prebuilt.onclick=event=>{event.stopPropagation();prebuiltPanel.hidden=!prebuiltPanel.hidden;prebuilt.setAttribute('aria-expanded',String(!prebuiltPanel.hidden));if(!prebuiltPanel.hidden)refreshWalletOnOpen()};
       prebuilt.dataset.controlPhiWalletBound='1';
       injectWalletIntoMenu();watchWalletMenu();refreshWalletUI();return
     }
@@ -589,11 +672,11 @@
     document.head.appendChild(style);
     const button=existingTrigger||document.createElement('button');
     button.id='controlPhiWalletButton';button.type='button';button.setAttribute('aria-label','Open unified wallet');button.setAttribute('aria-expanded','false');
-    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small></div><div class="cp-wallet-asset"><span>Owned Infinity tokens</span><strong data-control-phi-wallet-total>0</strong><small>One website token type</small></div><div class="cp-wallet-asset"><span>Created through Infinity Phi</span><strong data-control-phi-wallet-infinity>0</strong><small>tokens</small></div><div class="cp-wallet-asset"><span>Created through Omni Phi</span><strong data-control-phi-wallet-omni>0</strong><small>tokens</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Independent spendable balance</small></div><div class="cp-wallet-asset"><span>Created through QuantaPhi</span><strong data-control-phi-wallet-quanta-websites>0</strong><small>Infinity tokens</small></div><div class="cp-wallet-asset"><span>Legacy / metadata pending</span><strong data-control-phi-wallet-legacy>0</strong><small>counted, details not recovered yet</small></div><div class="cp-wallet-asset"><span>Music Quants</span><strong data-control-phi-wallet-music-quants>0</strong><small><span data-control-phi-wallet-piano>0</span> five-note + <span data-control-phi-wallet-listening>0</span> listening</small></div><div class="cp-wallet-asset"><span>Alien Coins</span><strong data-control-phi-wallet-alien-coins>0</strong><small>secured tokens</small></div></div><p>Each search creates an Infinity website token and a separate Quant. Spending either changes only that asset. Music Quants combine five-note and listening records.</p>';
+    const panel=document.createElement('section');panel.id='controlPhiWalletPanel';panel.hidden=true;panel.setAttribute('aria-label','Unified wallet');panel.innerHTML='<div class="cp-wallet-row"><span data-control-phi-wallet-name>Guest</span><strong>Unified Wallet</strong></div><div class="cp-wallet-assets"><div class="cp-wallet-asset"><span>Star Coins</span><strong><span data-control-phi-wallet-balance>0</span> ⭐</strong><small data-control-phi-wallet-progress>0/10</small><small data-control-phi-star-sync>Cached • checking StarQuest</small></div><div class="cp-wallet-asset"><span>Owned Infinity tokens</span><strong data-control-phi-wallet-total>0</strong><small>One website token type</small></div><div class="cp-wallet-asset"><span>Created through Infinity Phi</span><strong data-control-phi-wallet-infinity>0</strong><small>tokens</small></div><div class="cp-wallet-asset"><span>Created through Omni Phi</span><strong data-control-phi-wallet-omni>0</strong><small>tokens</small></div><div class="cp-wallet-asset"><span>Quants</span><strong data-control-phi-wallet-quants>0</strong><small>Independent spendable balance</small></div><div class="cp-wallet-asset"><span>Created through QuantaPhi</span><strong data-control-phi-wallet-quanta-websites>0</strong><small>Infinity tokens</small></div><div class="cp-wallet-asset"><span>Legacy / metadata pending</span><strong data-control-phi-wallet-legacy>0</strong><small>counted, details not recovered yet</small></div><div class="cp-wallet-asset"><span>Music Quants</span><strong data-control-phi-wallet-music-quants>0</strong><small><span data-control-phi-wallet-piano>0</span> five-note + <span data-control-phi-wallet-listening>0</span> listening</small></div><div class="cp-wallet-asset"><span>Alien Coins</span><strong data-control-phi-wallet-alien-coins>0</strong><small>secured tokens</small></div></div><p>Each search creates an Infinity website token and a separate Quant. Spending either changes only that asset. Music Quants combine five-note and listening records.</p>';
     const host=document.querySelector('.head-actions,.qbalances,[data-control-phi-wallet-host]');
     if(!existingTrigger){if(host)host.appendChild(button);else{button.classList.add('control-phi-wallet-floating');document.body.appendChild(button)}}
     document.body.appendChild(panel);
-    const toggle=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)refreshWalletUI()};
+    const toggle=()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)refreshWalletOnOpen()};
     button.onclick=event=>{event.stopPropagation();toggle()};button.dataset.controlPhiWalletBound='1';
     document.addEventListener('click',event=>{if(panel.hidden||event.target===button||button.contains(event.target)||panel.contains(event.target)||event.target?.closest?.('#controlPhiWalletMenuButton'))return;panel.hidden=true;button.setAttribute('aria-expanded','false')});
     injectWalletIntoMenu();
@@ -757,11 +840,11 @@
     const mount=()=>{if(!document.body.contains(host))document.body.appendChild(host);const t=latestExplicitAdTopic();if(t)renderSponsoredCard(host,t,location.pathname).catch(()=>{});else host.hidden=true};
     mount();setInterval(mount,30000);
   }
-  window.ControlPhi={version:'1.9.3',sourceCounts:canonicalSearchCounts,recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,reconcileCollectedAds,shopCart,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,refreshCloudWallet:refreshCloudBalances,requestSponsoredCard,renderSponsoredCard};
+  window.ControlPhi={version:'1.9.4',sourceCounts:canonicalSearchCounts,recordShare,trackingUrl:(input={})=>{const plan=sharePlan(input,input.platform||'share');return plan.trackingUrl},openNews:()=>location.assign(NEWS_URL),shareFeed:()=>read(SHARE_KEY,[]).slice(),interestFeed:()=>read(INTEREST_KEY,[]).slice(),wallet:walletSnapshot,recordActivity,contextFeed:()=>read(CONTEXT_KEY,[]).slice(),ensureShareCredit,ensureActionCredit,reconcileCollectedAds,shopCart,importLegacyStarCoinBalance,refreshWallet:refreshWalletUI,refreshCloudWallet:refreshCloudBalances,requestSponsoredCard,renderSponsoredCard};
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
   installContextBridge();
-  const boot=()=>{WALLET_ONLY?injectWallet():injectRemote();reconcileCollectedAds();installSponsoredSlot();void refreshCloudBalances()};
+  const boot=()=>{const monitor=document.createElement('script');monitor.src=ASSET_ROOT+'channel-oracle-watcher.js?v=20261010';document.body.appendChild(monitor);WALLET_ONLY?injectWallet():injectRemote();reconcileCollectedAds();installSponsoredSlot();void refreshCloudBalances()};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
