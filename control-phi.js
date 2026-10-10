@@ -252,6 +252,41 @@
       return found.length===1?found[0]:'';
     }catch{return ''}
   }
+function storedToken(key){const raw=localStorage.getItem(key)||'';if(/^sq_[A-Za-z0-9_-]{32,}$/.test(raw))return raw;const value=read(key,null);return /^sq_[A-Za-z0-9_-]{32,}$/.test(value?.deviceToken||'')?value.deviceToken:''}
+function deviceCandidates(){
+ const out=[],seen=new Set();
+ try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i)||'';if(!key.startsWith(STARQUEST_DEVICE_PREFIX))continue;const token=storedToken(key);if(token&&!seen.has(token)){seen.add(token);out.push({key,username:key.slice(STARQUEST_DEVICE_PREFIX.length).toLowerCase(),token})}}}catch{}
+ return out;
+}
+function findDeviceToken(){
+ try{
+  const session=read('starquest_session',null),username=String(session?.username||session?.key||'').toLowerCase();
+  if(username){const exact=storedToken(STARQUEST_DEVICE_PREFIX+username);if(exact)return exact}
+  const candidates=deviceCandidates();
+  return candidates.length===1?candidates[0].token:'';
+ }catch{return ''}
+}
+async function resolveChannelDeviceToken(){
+ const exact=findDeviceToken();if(exact)return exact;
+ const candidates=deviceCandidates();if(!candidates.length)return '';
+ const session=read('starquest_session',null),users=read('starquest_users',{}),backup=read('starquest_users_backup_v1',{});
+ const known=new Set([session?.key,session?.username,...Object.keys(users||{}),...Object.keys(backup||{})].map(v=>String(v||'').trim().toLowerCase()).filter(Boolean));
+ let matched=null,only=null,valid=0;
+ for(const candidate of candidates){
+  try{
+   const response=await fetch('https://starquest-ledger.marvaseater.workers.dev/v1/state',{headers:{authorization:'Bearer '+candidate.token},cache:'no-store',signal:AbortSignal.timeout(5000)});
+   const payload=await response.json().catch(()=>({}));if(!response.ok||!payload?.ok||!payload?.state)continue;
+   valid++;const username=String(payload.state.username||candidate.username||'').trim().toLowerCase(),entry={candidate,username};
+   only=entry;
+   if(username&&known.has(username)){matched=entry;break}
+  }catch(_){}
+ }
+ const chosen=matched||(valid===1?only:null);
+ if(!chosen)return '';
+ if(chosen.username&&storedToken(STARQUEST_DEVICE_PREFIX+chosen.username)!==chosen.candidate.token)try{localStorage.setItem(STARQUEST_DEVICE_PREFIX+chosen.username,chosen.candidate.token)}catch(_){}
+ return chosen.candidate.token;
+}
+
   async function phiCloudFetch(target,options={}){
     // StarQuest's own state endpoint uses its existing enrolled device token.
     // The Quant bridge intentionally accepts only Quant and Infinity routes.
@@ -292,7 +327,7 @@
         try{add(await bridge.resolveDeviceToken())}
         catch(error){console.warn('StarQuest token resolution deferred',error)}
       }
-      add(starQuestDeviceToken());
+      if(!tokens.length)add(await resolveChannelDeviceToken());
       if(!tokens.length)throw new Error('ledger_not_connected');
       let state=null,lastError='wallet_request_failed';
       for(const token of tokens){
@@ -377,9 +412,34 @@
     ]);
     refreshWalletUI();
   }
+  // Manual recovery uses the SAME confirmed StarQuest ledger as the Media Star.
+  // Never turn a pending receipt into an optimistic spendable balance.
+  document.addEventListener('click',event=>{
+    const button=event.target.closest?.('[data-control-phi-sync-stars]');
+    if(!button||button.disabled)return;
+    button.disabled=true;button.textContent='Syncing…';
+    void (async()=>{
+      try{
+        await window.QuantaStarCoinCloud?.flush?.();
+        await window.QuantaStarCoinCloud?.reconcile?.();
+        await flushStarReceipts();
+        await refreshStarCoinCloud();
+      }finally{button.disabled=false;button.textContent='Sync StarCoins'}
+    })();
+  });
   document.addEventListener('starquest:ledger-connected',refreshCloudBalances);
   window.addEventListener('load',refreshCloudBalances);
   window.addEventListener('focus',refreshCloudBalances);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshStarCoinCloud()});
+  // Media Star confirms the same account's whole coins. Re-read the authoritative
+  // StarQuest state including the tenths earned by actions, instead of copying it.
+  window.addEventListener('phi:media-star-wallet-synced',()=>{void refreshStarCoinCloud()});
+  window.addEventListener('quantaphi:star-coins-cloud',event=>{
+    const state=event?.detail;
+    if(Array.isArray(state?.settled)&&state.settled.length||state?.wallet_state)
+      void refreshStarCoinCloud();
+  });
+
   window.addEventListener('infinity-wallet-updated',refreshCloudBalances);
   document.addEventListener('starquest:auth-changed',refreshCloudBalances);
   window.addEventListener('phi:asset-balances',refreshWalletUI);
