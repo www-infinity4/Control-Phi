@@ -510,6 +510,8 @@
     if(button && button.innerHTML!==buttonMarkup)button.innerHTML=buttonMarkup;
     const name=document.querySelector('[data-control-phi-wallet-name]');
     if(name&&name.textContent!==snapshot.username)name.textContent=snapshot.username;
+    document.querySelectorAll('.infinity-wallet-button').forEach(el=>{const text='Wallet ⭐ '+snapshot.balance.toFixed(1);if(el.textContent!==text)el.textContent=text});
+    document.querySelectorAll('.infinity-wallet-panel').forEach(el=>{const text='⭐ '+snapshot.balance.toFixed(1)+' · '+snapshot.progressToNextCoin+'/10 · '+starCloudSyncStatus;if(el.textContent!==text)el.textContent=text});
     setStarCloudStatus(starCloudSyncStatus);
     return snapshot;
   }
@@ -844,6 +846,8 @@
   installShareBridge();
   installShareLinkBridge();
   installCrossTabBridge();
+  document.addEventListener('click',event=>{if(event.target?.closest?.('.infinity-wallet-button'))refreshWalletOnOpen()},true);
+  setInterval(()=>{if(!document.hidden)refreshWalletUI()},10000);
   installContextBridge();
   const boot=()=>{const monitor=document.createElement('script');monitor.src=ASSET_ROOT+'channel-oracle-watcher.js?v=20261010';document.body.appendChild(monitor);WALLET_ONLY?injectWallet():injectRemote();reconcileCollectedAds();installSponsoredSlot();void refreshCloudBalances()};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
