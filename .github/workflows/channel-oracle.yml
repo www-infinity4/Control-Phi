@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: '17 */6 * * *'
   push:
-    paths: ['control-phi.js', 'channel-oracle*', 'channels.json']
+    paths: ['control-phi.js', 'channel-oracle*', 'channels.json', '.github/workflows/channel-oracle.yml']
 permissions:
   contents: read
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   red-pink-black:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Compatible with Playwright 1.56.1.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
